@@ -140,6 +140,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
