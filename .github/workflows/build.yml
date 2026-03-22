@@ -1,0 +1,49 @@
+name: Native Android Debug Build
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # NEW: Explicitly set Java 17 and enable Gradle Caching (The biggest speed boost)
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: myApp/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: myApp
+        run: npm install
+
+      - name: Prebuild Native Files
+        working-directory: myApp
+        run: npx expo prebuild --platform android
+
+      - name: Build Debug APK with Gradle
+        working-directory: myApp/android
+        # NEW: Give Gradle enough memory to prevent thrashing and speed up compilation
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx4096m -XX:MaxMetaspaceSize=1024m'"
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Debug Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: myApp/android/app/build/outputs/apk/debug/*.apk
