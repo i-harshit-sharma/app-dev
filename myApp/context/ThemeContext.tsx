@@ -16,10 +16,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>('light');
 
     const toggleTheme = () => {
-        setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
+        setThemeState((prev) => {
+            const next = prev === 'light' ? 'dark' : 'light';
+            console.log(`[ThemeContext] Toggling theme from ${prev} to ${next}`);
+            return next;
+        });
     };
 
     const setTheme = (newTheme: Theme) => {
+        console.log(`[ThemeContext] Setting theme to ${newTheme}`);
         setThemeState(newTheme);
     };
 

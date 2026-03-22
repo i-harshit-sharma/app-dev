@@ -194,21 +194,30 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const [goals, setGoals] = useState<LongTermGoal[]>([]);
 
     const refreshTransactions = useCallback(async () => {
+        console.log("[TransactionContext] Refreshing transactions for user:", user?.id);
         if (!user?.id) {
             setTransactions([]);
             return;
         }
 
-        const data = await fetchTransactions(user.id);
-        setTransactions(data);
+        try {
+            const data = await fetchTransactions(user.id);
+            console.log(`[TransactionContext] Fetched ${data.length} transaction groups`);
+            setTransactions(data);
+        } catch (error) {
+            console.error("[TransactionContext] Error fetching transactions:", error);
+        }
     }, [user?.id]);
 
     useEffect(() => {
         const loadData = async () => {
+            console.log("[TransactionContext] Initializing database and loading data");
             setIsLoading(true);
             try {
                 await initDatabase();
+                console.log("[TransactionContext] Database initialized");
                 if (!user?.id) {
+                    console.log("[TransactionContext] No user found, clearing data");
                     setTransactions([]);
                     setNetWorthState(0);
                     return;
@@ -256,6 +265,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }, [refreshTransactions, user?.id]);
 
     const addTransaction = useCallback(async (newTransaction: Omit<TransactionItem, 'id'> & { date: Date }) => {
+        console.log("[TransactionContext] Adding transaction:", newTransaction.title);
         if (!user?.id) {
             console.error('Cannot add transaction without an authenticated user');
             return;
@@ -263,6 +273,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
 
         try {
             await addTxToDB(newTransaction, user.id);
+            console.log("[TransactionContext] Successfully added transaction");
             await refreshTransactions();
         } catch (error) {
             console.error("Failed to add transaction", error);
@@ -270,6 +281,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }, [refreshTransactions, user?.id]);
 
     const deleteTransaction = useCallback(async (itemId: string) => {
+        console.log("[TransactionContext] Deleting transaction:", itemId);
         if (!user?.id) {
             console.error('Cannot delete transaction without an authenticated user');
             return;
@@ -277,6 +289,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
 
         try {
             await deleteTxFromDB(itemId, user.id);
+            console.log("[TransactionContext] Successfully deleted transaction");
             await refreshTransactions();
         } catch (error) {
             console.error('Failed to delete transaction', error);
@@ -284,6 +297,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }, [refreshTransactions, user?.id]);
 
     const updateTransaction = useCallback(async (itemId: string, updatedTransaction: Omit<TransactionItem, 'id'> & { date: Date }) => {
+        console.log("[TransactionContext] Updating transaction:", itemId, updatedTransaction.title);
         if (!user?.id) {
             console.error('Cannot update transaction without an authenticated user');
             return;
@@ -291,6 +305,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
 
         try {
             await updateTxInDB(itemId, updatedTransaction, user.id);
+            console.log("[TransactionContext] Successfully updated transaction");
             await refreshTransactions();
         } catch (error) {
             console.error('Failed to update transaction', error);
@@ -298,6 +313,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }, [refreshTransactions, user?.id]);
 
     const setNetWorth = useCallback(async (value: number) => {
+        console.log("[TransactionContext] Setting net worth:", value);
         if (!user?.id) {
             setNetWorthState(0);
             return false;
@@ -307,12 +323,14 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         try {
             await SecureStore.setItemAsync(getNetWorthKey(user.id), String(value));
             return true;
-        } catch {
+        } catch (error) {
+            console.error("[TransactionContext] Failed to save net worth:", error);
             return false;
         }
     }, [user?.id]);
 
     const updateFinancialPlan = useCallback(async (partialPlan: Partial<FinancialPlan>) => {
+        console.log("[TransactionContext] Updating financial plan");
         if (!user?.id) {
             setFinancialPlan(DEFAULT_FINANCIAL_PLAN);
             return false;
@@ -334,8 +352,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         setFinancialPlan(merged);
         try {
             await SecureStore.setItemAsync(getFinancialPlanKey(user.id), JSON.stringify(merged));
+            console.log("[TransactionContext] Successfully updated financial plan");
             return true;
-        } catch {
+        } catch (error) {
+            console.error("[TransactionContext] Failed to save financial plan:", error);
             return false;
         }
     }, [financialPlan, user?.id]);

@@ -55,21 +55,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Check if user is already logged in on app start
   useEffect(() => {
     const bootstrapAsync = async () => {
+      console.log("[AuthContext] Bootstrapping Auth");
       try {
         const savedToken = await getStoredToken();
         if (savedToken) {
+          console.log("[AuthContext] Found saved token, verifying...");
           // Verify token is still valid
           const response = await AuthService.getMe(savedToken);
           if (response.success) {
+            console.log("[AuthContext] Token valid, user restored:", response.user?.email);
             setToken(savedToken);
             setUser(response.user);
           } else {
+            console.log("[AuthContext] Token invalid, clearing stored token");
             await clearStoredToken();
           }
+        } else {
+          console.log("[AuthContext] No saved token found");
         }
       } catch (error) {
-        console.error("Failed to restore token:", error);
+        console.error("[AuthContext] Failed to restore token:", error);
       } finally {
+        console.log("[AuthContext] Bootstrap complete");
         setIsLoading(false);
       }
     };
@@ -78,38 +85,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const register = async (data: RegisterPayload) => {
+    console.log("[AuthContext] Registering user with input payload:", data);
     try {
       await AuthService.register(data);
+      console.log("[AuthContext] Register successful");
     } catch (error) {
+      console.error("[AuthContext] Register failed:", error);
       throw error;
     }
   };
 
   const login = async (data: LoginPayload) => {
+    console.log("[AuthContext] Logging in user with email:", data.email);
     try {
       const response = await AuthService.login(data);
       setToken(response.token);
       setUser(response.user);
       await setStoredToken(response.token);
+      console.log("[AuthContext] Login successful");
     } catch (error) {
+      console.error("[AuthContext] Login failed:", error);
       throw error;
     }
   };
 
   const logout = async () => {
+    console.log("[AuthContext] Logging out user");
     try {
       setUser(null);
       setToken(null);
       await clearStoredToken();
+      console.log("[AuthContext] Logout successful");
     } catch (error) {
+      console.error("[AuthContext] Logout failed:", error);
       throw error;
     }
   };
 
   const updateProfile = async (data: { name?: string; email?: string; phone?: string; password?: string; passwordConfirm?: string }) => {
+    console.log("[AuthContext] Updating profile");
     if (!token) throw new Error("Not authenticated");
-    const response = await AuthService.updateProfile(token, data);
-    setUser(response.user);
+    try {
+      const response = await AuthService.updateProfile(token, data);
+      setUser(response.user);
+      console.log("[AuthContext] Profile update successful");
+    } catch (error) {
+      console.error("[AuthContext] Profile update failed:", error);
+      throw error;
+    }
   };
 
   const value: AuthContextType = {

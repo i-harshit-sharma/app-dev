@@ -32,7 +32,7 @@ async function fetchWithTimeout(
 ) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
+  console.log(input);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (error) {

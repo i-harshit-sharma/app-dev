@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,11 @@ import {
   ScrollView,
   ActivityIndicator,
   SafeAreaView,
-  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
+  TextInputProps,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -16,292 +20,346 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { Colors } from '@/constants/theme';
 
-export default function RegisterScreen() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+interface FormInputProps extends TextInputProps {
+  label: string;
+  icon: any; // Using any for icon name to avoid complex Ionicon type issues for now, but label is typed
+  error?: string;
+  theme: any;
+  isPassword?: boolean;
+}
+
+// 1. Abstracted Reusable Input Component with forwardRef for keyboard navigation
+const FormInput = React.forwardRef<TextInput, FormInputProps>(({ 
+  label, 
+  icon, 
+  error, 
+  theme, 
+  isPassword, 
+  ...textInputProps 
+}, ref) => {
+  const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={[styles.label, { color: theme.tint }]}>{label}</Text>
+      <View 
+        style={[
+          styles.inputContainer, 
+          { 
+            backgroundColor: theme.card, 
+            borderColor: error ? '#FF3B30' : (isFocused ? theme.tint : theme.border),
+            borderWidth: isFocused || error ? 1.5 : 1
+          }
+        ]}
+      >
+        <Ionicons name={icon} size={20} color={error ? '#FF3B30' : theme.icon} style={styles.inputIcon} />
+        <TextInput
+          ref={ref}
+          style={[styles.input, { color: theme.text }]}
+          placeholderTextColor="#A0A0A0"
+          selectionColor={theme.tint}
+          onFocus={(e) => {
+            setIsFocused(true);
+            textInputProps.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            textInputProps.onBlur?.(e);
+          }}
+          secureTextEntry={isPassword && !showPassword}
+          {...textInputProps}
+        />
+        {isPassword && (
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.showButton}>
+            <Ionicons
+              name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+              size={20}
+              color={theme.icon}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+});
+
+type FormDataType = typeof initialFormData;
+type FormErrors = Partial<Record<keyof FormDataType | 'form', string>>;
+
+const initialFormData = {
+  name: 'Harshit Sharma',
+  email: 'mailmehere090@gmail.com',
+  phone: '9876543210',
+  password: 'password',
+  confirmPassword: 'password',
+};
+
+export default function RegisterScreen() {
+  const [formData, setFormData] = useState<FormDataType>(initialFormData);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isLoading, setIsLoading] = useState(false);
+  
   const { register } = useAuth();
   const router = useRouter();
   const { theme: currentTheme } = useTheme();
   const theme = Colors[currentTheme];
 
+  // Refs for smooth keyboard navigation
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
+
+  const updateForm = (key: keyof FormDataType, value: string) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+    if (errors[key]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[key];
+        return newErrors;
+      });
+    }
+  };
+
+  const validateForm = () => {
+    let newErrors: FormErrors = {};
+    const { name, email, phone, password, confirmPassword } = formData;
+
+    if (!name.trim()) newErrors.name = 'Name is required';
+    if (!/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(email.trim())) newErrors.email = 'Valid email is required';
+    if (!/^[0-9]{10}$/.test(phone.trim())) newErrors.phone = 'Valid 10-digit phone number is required';
+    if (password.length < 6) newErrors.password = 'Password must be at least 6 characters';
+    if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleRegister = async () => {
-    const normalizedName = name.trim();
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedPhone = phone.trim();
-
-    if (!normalizedName || !normalizedEmail || !normalizedPhone || !password || !passwordConfirm) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    if (!/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(normalizedEmail)) {
-      Alert.alert('Error', 'Please enter a valid email');
-      return;
-    }
-
-    if (!/^[0-9]{10}$/.test(normalizedPhone)) {
-      Alert.alert('Error', 'Please enter a valid 10-digit phone number');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return;
-    }
-
-    if (password !== passwordConfirm) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
     try {
-      await register({ name: normalizedName, email: normalizedEmail, phone: normalizedPhone, password, passwordConfirm });
-      Alert.alert('Success', 'Registration successful. Check your email for OTP verification.', [
-        { text: 'OK', onPress: () => router.push({ pathname: '/verify-otp', params: { email: normalizedEmail } }) },
-      ]);
+      await register({ 
+        name: formData.name.trim(), 
+        email: formData.email.trim().toLowerCase(), 
+        phone: formData.phone.trim(), 
+        password: formData.password,
+        passwordConfirm: formData.confirmPassword // User calls it confirmPassword locally, backend likely expects passwordConfirm
+      });
+      router.push({ pathname: '/verify-otp', params: { email: formData.email.trim().toLowerCase() } });
     } catch (error) {
-      Alert.alert('Registration Failed', error instanceof Error ? error.message : 'Unknown error occurred');
+      setErrors({ form: error instanceof Error ? error.message : 'Registration failed' });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleBackToLogin = () => {
-    router.push('/login');
-  };
-
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBackToLogin} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.tint} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.tint }]}>Create Account</Text>
-          <Text style={[styles.subtitle, { color: theme.icon }]}>Join FinVault today</Text>
-        </View>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={styles.flex1}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView 
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.header}>
+              <Ionicons name="wallet-outline" size={48} color={theme.tint} />
+              <Text style={[styles.title, { color: theme.text }]}>Create Account</Text>
+              <Text style={[styles.subtitle, { color: theme.icon }]}>Join FinVault today</Text>
+            </View>
 
-        {/* Form */}
-        <View style={styles.form}>
-          {/* Name Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.tint }]}>Full Name</Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Ionicons name="person-outline" size={20} color={theme.icon} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
+            {errors.form && <Text style={[styles.errorText, styles.globalError]}>{errors.form}</Text>}
+
+            <View style={styles.form}>
+              <FormInput
+                label="Full Name"
+                icon="person-outline"
                 placeholder="John Doe"
-                placeholderTextColor={theme.icon}
-                value={name}
-                onChangeText={setName}
+                theme={theme}
+                value={formData.name}
+                onChangeText={(text) => updateForm('name', text)}
+                error={errors.name}
                 editable={!isLoading}
                 autoCapitalize="words"
-                selectionColor={theme.tint}
+                returnKeyType="next"
+                onSubmitEditing={() => emailRef.current?.focus()}
               />
-            </View>
-          </View>
 
-          {/* Email Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.tint }]}>Email</Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Ionicons name="mail-outline" size={20} color={theme.icon} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
+              <FormInput
+                ref={emailRef}
+                label="Email"
+                icon="mail-outline"
                 placeholder="your@email.com"
-                placeholderTextColor={theme.icon}
-                value={email}
-                onChangeText={setEmail}
+                theme={theme}
+                value={formData.email}
+                onChangeText={(text) => updateForm('email', text)}
+                error={errors.email}
                 editable={!isLoading}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                selectionColor={theme.tint}
+                returnKeyType="next"
+                onSubmitEditing={() => phoneRef.current?.focus()}
               />
-            </View>
-          </View>
 
-          {/* Phone Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.tint }]}>Phone Number</Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Ionicons name="call-outline" size={20} color={theme.icon} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="1234567890"
-                placeholderTextColor={theme.icon}
-                value={phone}
-                onChangeText={setPhone}
+              <FormInput
+                ref={phoneRef}
+                label="Phone Number"
+                icon="call-outline"
+                placeholder="XXX-XXX-XXXX"
+                theme={theme}
+                value={formData.phone}
+                onChangeText={(text) => updateForm('phone', text)}
+                error={errors.phone}
                 editable={!isLoading}
                 keyboardType="phone-pad"
                 maxLength={10}
-                selectionColor={theme.tint}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
-            </View>
-          </View>
 
-          {/* Password Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.tint }]}>Password</Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Ionicons name="lock-closed-outline" size={20} color={theme.icon} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
+              <FormInput
+                ref={passwordRef}
+                label="Password"
+                icon="lock-closed-outline"
                 placeholder="••••••••"
-                placeholderTextColor={theme.icon}
-                value={password}
-                onChangeText={setPassword}
+                theme={theme}
+                value={formData.password}
+                onChangeText={(text) => updateForm('password', text)}
+                error={errors.password}
                 editable={!isLoading}
-                secureTextEntry={!showPassword}
-                selectionColor={theme.tint}
+                isPassword
+                returnKeyType="next"
+                onSubmitEditing={() => confirmRef.current?.focus()}
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.showButton}>
-                <Ionicons
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color={theme.icon}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
 
-          {/* Confirm Password Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.tint }]}>Confirm Password</Text>
-            <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Ionicons name="lock-closed-outline" size={20} color={theme.icon} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
+              <FormInput
+                ref={confirmRef}
+                label="Confirm Password"
+                icon="lock-closed-outline"
                 placeholder="••••••••"
-                placeholderTextColor={theme.icon}
-                value={passwordConfirm}
-                onChangeText={setPasswordConfirm}
+                theme={theme}
+                value={formData.confirmPassword}
+                onChangeText={(text) => updateForm('confirmPassword', text)}
+                error={errors.confirmPassword}
                 editable={!isLoading}
-                secureTextEntry={!showConfirmPassword}
-                selectionColor={theme.tint}
+                isPassword
+                returnKeyType="done"
+                onSubmitEditing={handleRegister}
               />
-              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.showButton}>
-                <Ionicons
-                  name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color={theme.icon}
-                />
+
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: theme.tint }, isLoading && styles.buttonDisabled]}
+                onPress={handleRegister}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Register</Text>
+                )}
               </TouchableOpacity>
+
+              <View style={styles.loginContainer}>
+                <Text style={[styles.loginText, { color: theme.icon }]}>Already have an account? </Text>
+                <TouchableOpacity onPress={() => router.push('/login')} disabled={isLoading} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={[styles.loginLink, { color: theme.tint }]}>Login here</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-
-          {/* Register Button */}
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: theme.tint }, isLoading && styles.buttonDisabled]}
-            onPress={handleRegister}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Register</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Login Link */}
-          <View style={styles.loginContainer}>
-            <Text style={[styles.loginText, { color: theme.icon }]}>Already have an account? </Text>
-            <TouchableOpacity onPress={handleBackToLogin} disabled={isLoading}>
-              <Text style={[styles.loginLink, { color: theme.tint }]}>Login here</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
+  flex1: { flex: 1 },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 40,
   },
   header: {
-    marginBottom: 40,
-    marginTop: 20,
-  },
-  backButton: {
-    marginBottom: 12,
-    padding: 4,
-    width: 40,
+    alignItems: 'center',
+    marginBottom: 32,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 6,
+    marginTop: 16,
   },
-  subtitle: {
-    fontSize: 14,
-  },
-  form: {
-    gap: 16,
-  },
-  inputGroup: {
-    gap: 8,
-  },
+  subtitle: { fontSize: 16 },
+  form: { gap: 16 },
+  inputGroup: { gap: 6 },
   label: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginLeft: 4,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    minHeight: 52,
   },
-  inputIcon: {
-    marginRight: 8,
-  },
+  inputIcon: { marginRight: 10 },
   input: {
     flex: 1,
-    paddingVertical: 12,
-    color: '#1A2B3C',
+    fontSize: 16,
+    fontWeight: '500',
+    paddingVertical: 14,
+  },
+  showButton: { padding: 8 },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 12,
+    marginLeft: 4,
+    marginTop: -2,
+  },
+  globalError: {
+    textAlign: 'center',
+    marginBottom: 16,
     fontSize: 14,
   },
-  showButton: {
-    padding: 8,
-  },
   button: {
-    paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
+    minHeight: 56,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
+  buttonDisabled: { opacity: 0.6 },
   buttonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 16,
   },
-  loginText: {
-    fontSize: 14,
-  },
+  loginText: { fontSize: 14 },
   loginLink: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
