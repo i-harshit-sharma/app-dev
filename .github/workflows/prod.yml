@@ -199,3 +199,16 @@ jobs:
         with:
           name: android-release-apk
           path: myApp/android/app/build/outputs/apk/release/*.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' # Only run on the main branch
+        with:
+          tag_name: "build-${{ github.run_number }}" # Automatically generates a unique tag like "build-42"
+          name: "Production Build #${{ github.run_number }}"
+          body: "Automated Android release build from the main branch."
+          files: |
+            myApp/android/app/build/outputs/bundle/release/*.aab
+            myApp/android/app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
