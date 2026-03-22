@@ -1,3 +1,66 @@
+# # name: Native Android Production Build
+# # on:
+# #   push:
+# #     branches: [main]
+
+# # jobs:
+# #   build:
+# #     runs-on: ubuntu-latest
+# #     environment: production # <--- ADD THIS LINE
+# #     steps:
+# #       - name: Checkout Repository
+# #         uses: actions/checkout@v4
+
+# #       # FIX 1: Explicitly set Java 17 and enable Gradle Caching
+# #       - name: Setup Java
+# #         uses: actions/setup-java@v4
+# #         with:
+# #           distribution: 'zulu'
+# #           java-version: '17'
+# #           cache: 'gradle'
+
+# #       - name: Setup Node.js
+# #         uses: actions/setup-node@v4
+# #         with:
+# #           node-version: 20
+# #           cache: 'npm'
+# #           cache-dependency-path: myApp/package-lock.json
+
+# #       - name: Install Dependencies
+# #         working-directory: myApp
+# #         run: npm install
+
+# #       - name: Prebuild Native Files
+# #         working-directory: myApp
+# #         run: npx expo prebuild --platform android
+
+# #       - name: Decode Keystore
+# #         working-directory: myApp/android/app
+# #         # FIX 2: Added a check to ensure the secret isn't empty
+# #         run: |
+# #           if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+# #             echo "Error: ANDROID_KEYSTORE_BASE64 is empty"
+# #             exit 1
+# #           fi
+# #           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.jks
+
+# #       - name: Build Release Bundle (AAB)
+# #         working-directory: myApp/android
+# #         run: |
+# #           chmod +x gradlew
+# #           ./gradlew bundleRelease \
+# #             -Pandroid.injected.signing.store.file=$(pwd)/app/release.jks \
+# #             -Pandroid.injected.signing.store.password=${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+# #             -Pandroid.injected.signing.key.alias=${{ secrets.ANDROID_KEY_ALIAS }} \
+# #             -Pandroid.injected.signing.key.password=${{ secrets.ANDROID_KEY_PASSWORD }}
+
+# #       - name: Upload Release Artifact
+# #         uses: actions/upload-artifact@v4
+# #         with:
+# #           name: android-release-aab
+# #           path: myApp/android/app/build/outputs/bundle/release/*.aab
+
+
 # name: Native Android Production Build
 # on:
 #   push:
@@ -6,12 +69,11 @@
 # jobs:
 #   build:
 #     runs-on: ubuntu-latest
-#     environment: production # <--- ADD THIS LINE
+#     environment: production
 #     steps:
 #       - name: Checkout Repository
 #         uses: actions/checkout@v4
 
-#       # FIX 1: Explicitly set Java 17 and enable Gradle Caching
 #       - name: Setup Java
 #         uses: actions/setup-java@v4
 #         with:
@@ -36,7 +98,6 @@
 
 #       - name: Decode Keystore
 #         working-directory: myApp/android/app
-#         # FIX 2: Added a check to ensure the secret isn't empty
 #         run: |
 #           if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
 #             echo "Error: ANDROID_KEYSTORE_BASE64 is empty"
@@ -44,22 +105,31 @@
 #           fi
 #           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.jks
 
-#       - name: Build Release Bundle (AAB)
+#       # UPDATED: Builds both the Bundle (AAB) and the APK, with memory optimization
+#       - name: Build Release Bundle & APK
 #         working-directory: myApp/android
+#         env:
+#           GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx4096m -XX:MaxMetaspaceSize=1024m'"
 #         run: |
 #           chmod +x gradlew
-#           ./gradlew bundleRelease \
+#           ./gradlew bundleRelease assembleRelease \
 #             -Pandroid.injected.signing.store.file=$(pwd)/app/release.jks \
 #             -Pandroid.injected.signing.store.password=${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
 #             -Pandroid.injected.signing.key.alias=${{ secrets.ANDROID_KEY_ALIAS }} \
 #             -Pandroid.injected.signing.key.password=${{ secrets.ANDROID_KEY_PASSWORD }}
 
-#       - name: Upload Release Artifact
+#       - name: Upload Release AAB (For Play Store)
 #         uses: actions/upload-artifact@v4
 #         with:
 #           name: android-release-aab
 #           path: myApp/android/app/build/outputs/bundle/release/*.aab
 
+#       # NEW: Uploads the APK so you can download and install it directly
+#       - name: Upload Release APK (For Direct Install)
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: android-release-apk
+#           path: myApp/android/app/build/outputs/apk/release/*.apk
 
 name: Native Android Production Build
 on:
@@ -73,13 +143,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-          cache: 'gradle'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -96,6 +159,14 @@ jobs:
         working-directory: myApp
         run: npx expo prebuild --platform android
 
+      # Java setup is placed HERE so it can cache the newly generated Gradle files
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
       - name: Decode Keystore
         working-directory: myApp/android/app
         run: |
@@ -105,7 +176,6 @@ jobs:
           fi
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.jks
 
-      # UPDATED: Builds both the Bundle (AAB) and the APK, with memory optimization
       - name: Build Release Bundle & APK
         working-directory: myApp/android
         env:
@@ -124,7 +194,6 @@ jobs:
           name: android-release-aab
           path: myApp/android/app/build/outputs/bundle/release/*.aab
 
-      # NEW: Uploads the APK so you can download and install it directly
       - name: Upload Release APK (For Direct Install)
         uses: actions/upload-artifact@v4
         with:
