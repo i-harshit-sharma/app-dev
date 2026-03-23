@@ -1,5 +1,23 @@
 import Constants from "expo-constants";
 
+// function resolveApiUrl() {
+//   const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+//   if (envUrl) { 
+//     return envUrl.replace(/\/+$/, "");
+//   }
+
+//   // expoGoConfig.debuggerHost is the runtime host:port injected by Expo Go,
+//   // e.g. "192.168.0.100:8081". We extract just the IP to build the backend URL.
+//   const debuggerHost =
+//     Constants.expoGoConfig?.debuggerHost ??
+//     (Constants as any).manifest?.debuggerHost;
+//   const host = debuggerHost?.split(":")[0];
+//   if (host) {
+//     return `https://app-dev-taupe-three.vercel.app/api`;
+//   }
+
+//   return "https://app-dev-taupe-three.vercel.app/api";
+// }
 function resolveApiUrl() {
   const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (envUrl) { 
@@ -13,10 +31,10 @@ function resolveApiUrl() {
     (Constants as any).manifest?.debuggerHost;
   const host = debuggerHost?.split(":")[0];
   if (host) {
-    return `https://app-dev-taupe-three.vercel.app/api`;
+    return `http://${host}:5000/api`;
   }
 
-  return "https://app-dev-taupe-three.vercel.app/api";
+  return "http://localhost:5000/api";
 }
 
 const API_URL = resolveApiUrl();

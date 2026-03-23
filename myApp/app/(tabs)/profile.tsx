@@ -1,6 +1,6 @@
-﻿import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Alert,
     FlatList,
@@ -17,6 +17,7 @@ import {
     View,
     ActivityIndicator,
     KeyboardAvoidingView,
+    Animated,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
@@ -26,7 +27,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useTransactions } from '@/context/TransactionContext';
 import { useRouter } from 'expo-router';
 
-const PROFILE_IMAGE = 'https://i.pravatar.cc/300?img=47';
+const getProfileImage = (name?: string) => {
+    const displayName = name || 'User';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0D8ABC&color=fff&size=300`;
+};
 
 const LANGUAGES = [
     { code: 'en', label: 'English (US)', flag: '🇺🇸' },
@@ -97,6 +101,10 @@ export default function ProfileScreen() {
     const [sipInput, setSipInput] = useState('');
     const [mutualFundsInput, setMutualFundsInput] = useState('');
     const [otherSavingsInput, setOtherSavingsInput] = useState('');
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     // Load persisted preferences on mount
     useEffect(() => {
@@ -115,23 +123,55 @@ export default function ProfileScreen() {
         loadPrefs();
     }, []);
 
+    const formatINR = (num: number | string) => {
+        const val = typeof num === 'number' ? Math.round(num).toString() : num.replace(/[^0-9]/g, '');
+        if (!val) return '';
+        const lastThree = val.substring(val.length - 3);
+        const otherNumbers = val.substring(0, val.length - 3);
+        if (otherNumbers !== '') {
+            return otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + lastThree;
+        }
+        return lastThree;
+    };
+
     const openFinancialPlanModal = () => {
-        setMonthlyIncomeInput(String(Math.round(financialPlan.monthlyIncome || 0)));
-        setMonthlyBudgetInput(String(Math.round(financialPlan.monthlyBudget || 0)));
-        setEmiInput(String(Math.round(financialPlan.fixedObligations.emi || 0)));
-        setFixedOtherInput(String(Math.round((financialPlan.fixedObligations.rentAndUtilities + financialPlan.fixedObligations.otherFixed) || 0)));
-        setSipInput(String(Math.round(financialPlan.savingsInvestments.sip || 0)));
-        setMutualFundsInput(String(Math.round(financialPlan.savingsInvestments.mutualFunds || 0)));
-        setOtherSavingsInput(String(Math.round(financialPlan.savingsInvestments.otherSavings || 0)));
+        setMonthlyIncomeInput(financialPlan.monthlyIncome ? formatINR(financialPlan.monthlyIncome) : '');
+        setMonthlyBudgetInput(financialPlan.monthlyBudget ? formatINR(financialPlan.monthlyBudget) : '');
+        setEmiInput(financialPlan.fixedObligations.emi ? formatINR(financialPlan.fixedObligations.emi) : '');
+        const fixedOther = (financialPlan.fixedObligations.rentAndUtilities + financialPlan.fixedObligations.otherFixed);
+        setFixedOtherInput(fixedOther ? formatINR(fixedOther) : '');
+        setSipInput(financialPlan.savingsInvestments.sip ? formatINR(financialPlan.savingsInvestments.sip) : '');
+        setMutualFundsInput(financialPlan.savingsInvestments.mutualFunds ? formatINR(financialPlan.savingsInvestments.mutualFunds) : '');
+        setOtherSavingsInput(financialPlan.savingsInvestments.otherSavings ? formatINR(financialPlan.savingsInvestments.otherSavings) : '');
         setFinancialPlanVisible(true);
     };
 
+    const toNumber = (value: string) => {
+        const sanitized = (value || '').replace(/,/g, '').replace(/[^0-9.]/g, '').trim();
+        const numeric = Number(sanitized);
+        return Number.isFinite(numeric) && numeric >= 0 ? numeric : 0;
+    };
+
+    const displayToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToastMessage(message);
+        setToastType(type);
+        setShowToast(true);
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+        }).start();
+
+        setTimeout(() => {
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+            }).start(() => setShowToast(false));
+        }, 3000);
+    };
+
     const handleSaveFinancialPlan = async () => {
-        const toNumber = (value: string) => {
-            const sanitized = value.replace(/,/g, '').replace(/[^0-9.]/g, '').trim();
-            const numeric = Number(sanitized);
-            return Number.isFinite(numeric) && numeric >= 0 ? numeric : 0;
-        };
 
         const persisted = await updateFinancialPlan({
             monthlyIncome: toNumber(monthlyIncomeInput),
@@ -150,10 +190,10 @@ export default function ProfileScreen() {
 
         setFinancialPlanVisible(false);
         if (!persisted) {
-            Alert.alert('Saved', 'Financial plan updated, but could not be saved permanently on this device.');
+            displayToast('Financial plan updated, but could not be saved permanently.', 'info');
             return;
         }
-        Alert.alert('Success', 'Financial plan updated successfully.');
+        displayToast('Financial plan updated successfully.', 'success');
     };
 
     const handleLanguageSelect = async (lang: typeof LANGUAGES[0]) => {
@@ -166,7 +206,7 @@ export default function ProfileScreen() {
         setFaceIdEnabled(value);
         await setPref(PREF_KEYS.faceId, String(value));
         if (value) {
-            Alert.alert('Face ID Enabled', 'Biometric authentication will be used on the next app launch.');
+            displayToast('Face ID Enabled. Biometric login ready.', 'success');
         }
     };
 
@@ -204,7 +244,7 @@ export default function ProfileScreen() {
         try {
             await SecureStore.setItemAsync('userPIN', pinValue);
             setPinVisible(false);
-            Alert.alert('Success', 'Your PIN has been set successfully.');
+            displayToast('Your PIN has been set successfully.', 'success');
         } catch {
             setPinError('Failed to save PIN. Please try again.');
         } finally {
@@ -234,24 +274,24 @@ export default function ProfileScreen() {
 
     const handleSaveProfile = async () => {
         if (!editName.trim()) {
-            Alert.alert('Validation Error', 'Name cannot be empty.');
+            displayToast('Name cannot be empty.', 'error');
             return;
         }
         if (!editEmail.trim()) {
-            Alert.alert('Validation Error', 'Email cannot be empty.');
+            displayToast('Email cannot be empty.', 'error');
             return;
         }
         if (!editPhone.trim()) {
-            Alert.alert('Validation Error', 'Phone cannot be empty.');
+            displayToast('Phone cannot be empty.', 'error');
             return;
         }
         if (editPassword || editPasswordConfirm) {
             if (editPassword !== editPasswordConfirm) {
-                Alert.alert('Validation Error', 'Passwords do not match.');
+                displayToast('Passwords do not match.', 'error');
                 return;
             }
             if (editPassword.length < 6) {
-                Alert.alert('Validation Error', 'Password must be at least 6 characters.');
+                displayToast('Password must be at least 6 characters.', 'error');
                 return;
             }
         }
@@ -269,9 +309,9 @@ export default function ProfileScreen() {
             }
             await updateProfile(payload);
             setEditVisible(false);
-            Alert.alert('Success', 'Profile updated successfully!');
+            displayToast('Profile updated successfully!', 'success');
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to update profile.');
+            displayToast(error.message || 'Failed to update profile.', 'error');
         } finally {
             setEditLoading(false);
         }
@@ -284,7 +324,7 @@ export default function ProfileScreen() {
             [
                 {
                     text: 'Cancel',
-                    onPress: () => {},
+                    onPress: () => { },
                     style: 'cancel',
                 },
                 {
@@ -294,7 +334,7 @@ export default function ProfileScreen() {
                             await logout();
                             router.replace('/login');
                         } catch (error) {
-                            Alert.alert('Error', 'Failed to logout');
+                            displayToast('Failed to logout', 'error');
                         }
                     },
                     style: 'destructive',
@@ -310,7 +350,7 @@ export default function ProfileScreen() {
     const stats = [
         {
             label: 'Monthly Income',
-            value: `INR ${Math.round(financialPlan.monthlyIncome).toLocaleString('en-IN')}`,
+            value: `₹${Math.round(financialPlan.monthlyIncome).toLocaleString('en-IN')}`,
             icon: 'wallet',
             color: theme.emerald,
             onPress: openFinancialPlanModal,
@@ -318,7 +358,7 @@ export default function ProfileScreen() {
         },
         {
             label: 'Monthly Budget',
-            value: `INR ${Math.round(financialPlan.monthlyBudget).toLocaleString('en-IN')}`,
+            value: `₹${Math.round(financialPlan.monthlyBudget).toLocaleString('en-IN')}`,
             icon: 'cash',
             color: theme.tint,
             onPress: openFinancialPlanModal,
@@ -326,7 +366,7 @@ export default function ProfileScreen() {
         },
         {
             label: 'Weekly Budget',
-            value: `INR ${Math.round(weeklyBudget).toLocaleString('en-IN')}`,
+            value: `₹${Math.round(weeklyBudget).toLocaleString('en-IN')}`,
             icon: 'calendar-week',
             color: theme.warning,
             editable: false,
@@ -426,7 +466,7 @@ export default function ProfileScreen() {
                             end={{ x: 1, y: 1 }}
                         >
                             <Image
-                                source={{ uri: PROFILE_IMAGE }}
+                                source={{ uri: getProfileImage(user?.name) }}
                                 style={[styles.avatar, { borderColor: theme.card }]}
                             />
                         </LinearGradient>
@@ -445,13 +485,24 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
-                {/* Stats Row */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.statsContainer}
-                    style={{ flexGrow: 0 }}
+                {/* Prominent Action Button */}
+                <TouchableOpacity
+                    style={[styles.prominentBtn, { backgroundColor: theme.background }]}
+                    onPress={openFinancialPlanModal}
+                    activeOpacity={0.85}
                 >
+                    <View style={[styles.prominentIconContainer, { backgroundColor: theme.card }]}>
+                        <Ionicons name="wallet-outline" size={24} color={theme.text} />
+                    </View>
+                    <View style={styles.prominentTextContainer}>
+                        <Text style={[styles.prominentTitle, { color: theme.text }]}>Update Financial Plan</Text>
+                        <Text style={[styles.prominentSubtitle, { color: theme.icon }]}>Set your income, budget, and savings targets</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.text} />
+                </TouchableOpacity>
+
+                {/* Stats Row */}
+                <View style={styles.statsContainer}>
                     {stats.map((stat, index) => (
                         <TouchableOpacity
                             key={index}
@@ -466,13 +517,14 @@ export default function ProfileScreen() {
                             <View style={[styles.statIcon, { backgroundColor: stat.color + '15' }]}>
                                 <MaterialCommunityIcons name={stat.icon as any} size={20} color={stat.color} />
                             </View>
-                            <View>
-                                <Text style={[styles.statLabel, { color: theme.icon }]}>{stat.label}</Text>
-                                <Text style={[styles.statValue, { color: theme.text }]}>{stat.value}</Text>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.statLabel, { color: theme.icon }]} numberOfLines={1}>{stat.label}</Text>
+                                <Text style={[styles.statValue, { color: theme.text }]} numberOfLines={1}>{stat.value}</Text>
                             </View>
                         </TouchableOpacity>
                     ))}
-                </ScrollView>
+                </View>
+
 
                 {/* Settings */}
                 <View style={styles.settingsContainer}>
@@ -549,7 +601,7 @@ export default function ProfileScreen() {
                     <Text style={[styles.version, { color: theme.icon }]}>Version 2.4.0 (Build 305)</Text>
 
                     {/* Bottom Padding */}
-                    <View style={{ height: 100 }} />
+                    {/* <View style={{ height: 100 }} /> */}
                 </View>
             </ScrollView>
 
@@ -666,7 +718,7 @@ export default function ProfileScreen() {
                                 )}
                             </TouchableOpacity>
 
-                            <View style={{ height: 32 }} />
+                            {/* <View style={{ height: 32 }} /> */}
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
@@ -845,7 +897,7 @@ export default function ProfileScreen() {
             >
                 <KeyboardAvoidingView
                     style={styles.modalOverlay}
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    // behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
                     <View style={[styles.modalContainer, { backgroundColor: theme.card }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
@@ -857,116 +909,163 @@ export default function ProfileScreen() {
                         </View>
 
                         <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
-                            <Text style={[styles.fieldLabel, { color: theme.icon }]}>Monthly Income (INR)</Text>
-                            <View style={[
-                                styles.inputWrapper,
-                                { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F3F4F6', borderColor: theme.border }
-                            ]}>
-                                <Ionicons name="cash-outline" size={18} color={theme.icon} style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, { color: theme.text }]}
-                                    value={monthlyIncomeInput}
-                                    onChangeText={setMonthlyIncomeInput}
-                                    placeholder="e.g. 80000"
-                                    placeholderTextColor={theme.icon}
-                                    keyboardType="numeric"
-                                />
+                            {/* Section: Income & Budget */}
+                            <View style={[styles.modalContentCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fff', borderColor: theme.border, borderWidth: 1, borderRadius: 10, padding: 16 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                                    <View style={[styles.statIcon, { backgroundColor: theme.emerald + '15', marginRight: 12 }]}>
+                                        <Ionicons name="wallet-outline" size={20} color={theme.emerald} />
+                                    </View>
+                                    <Text style={[styles.modalSectionTitle, { color: theme.text, marginBottom: 0 }]}>Income & Budget</Text>
+                                </View>
+
+                                <Text style={[styles.fieldLabel, { color: theme.icon }]}>Monthly Income</Text>
+                                <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F9FAFB', borderColor: theme.border }]}>
+                                    <Text style={[styles.currencyPrefix, { color: theme.icon }]}>₹</Text>
+                                    <TextInput
+                                        style={[styles.input, { color: theme.text }]}
+                                        value={monthlyIncomeInput}
+                                        onChangeText={(v) => setMonthlyIncomeInput(formatINR(v))}
+                                        placeholder="0"
+                                        placeholderTextColor={theme.icon}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+
+                                <Text style={[styles.fieldLabel, { color: theme.icon }]}>Monthly Spending Budget</Text>
+                                <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F9FAFB', borderColor: theme.border }]}>
+                                    <Text style={[styles.currencyPrefix, { color: theme.icon }]}>₹</Text>
+                                    <TextInput
+                                        style={[styles.input, { color: theme.text }]}
+                                        value={monthlyBudgetInput}
+                                        onChangeText={(v) => setMonthlyBudgetInput(formatINR(v))}
+                                        placeholder="0"
+                                        placeholderTextColor={theme.icon}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
                             </View>
 
-                            <Text style={[styles.fieldLabel, { color: theme.icon }]}>Monthly Spending Budget (INR)</Text>
-                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F3F4F6', borderColor: theme.border }]}>
-                                <Ionicons name="wallet-outline" size={18} color={theme.icon} style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, { color: theme.text }]}
-                                    value={monthlyBudgetInput}
-                                    onChangeText={setMonthlyBudgetInput}
-                                    placeholder="e.g. 30000"
-                                    placeholderTextColor={theme.icon}
-                                    keyboardType="numeric"
-                                />
+                            {/* Section: Fixed Outflows */}
+                            <View style={[styles.modalContentCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fff', borderColor: theme.border, borderWidth: 1, borderRadius: 10, padding: 16, marginTop: 16 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                                    <View style={[styles.statIcon, { backgroundColor: theme.expense + '15', marginRight: 12 }]}>
+                                        <Ionicons name="card-outline" size={20} color={theme.expense} />
+                                    </View>
+                                    <Text style={[styles.modalSectionTitle, { color: theme.text, marginBottom: 0 }]}>Fixed Outflows</Text>
+                                </View>
+
+                                <Text style={[styles.fieldLabel, { color: theme.icon }]}>Fixed EMI</Text>
+                                <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F9FAFB', borderColor: theme.border }]}>
+                                    <Text style={[styles.currencyPrefix, { color: theme.icon }]}>₹</Text>
+                                    <TextInput
+                                        style={[styles.input, { color: theme.text }]}
+                                        value={emiInput}
+                                        onChangeText={(v) => setEmiInput(formatINR(v))}
+                                        placeholder="0"
+                                        placeholderTextColor={theme.icon}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+
+                                <Text style={[styles.fieldLabel, { color: theme.icon }]}>Rent & Utilities</Text>
+                                <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F9FAFB', borderColor: theme.border }]}>
+                                    <Text style={[styles.currencyPrefix, { color: theme.icon }]}>₹</Text>
+                                    <TextInput
+                                        style={[styles.input, { color: theme.text }]}
+                                        value={fixedOtherInput}
+                                        onChangeText={(v) => setFixedOtherInput(formatINR(v))}
+                                        placeholder="0"
+                                        placeholderTextColor={theme.icon}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+
+                                <View style={[styles.calcRow, { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 12, marginTop: 4 }]}>
+                                    <Text style={[styles.calcLabel, { color: theme.icon }]}>Total Fixed Outflows</Text>
+                                    <Text style={[styles.calcValue, { color: theme.text }]}>₹{formatINR(toNumber(emiInput) + toNumber(fixedOtherInput)) || '0'}</Text>
+                                </View>
                             </View>
 
-                            <Text style={[styles.sectionLabel, { color: theme.icon }]}>Outflows</Text>
+                            {/* Section: Savings & Investments */}
+                            <View style={[styles.modalContentCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fff', borderColor: theme.border, borderWidth: 1, borderRadius: 20, padding: 16, marginTop: 16 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                                    <View style={[styles.statIcon, { backgroundColor: theme.tint + '15', marginRight: 12 }]}>
+                                        <Ionicons name="trending-up-outline" size={20} color={theme.tint} />
+                                    </View>
+                                    <Text style={[styles.modalSectionTitle, { color: theme.text, marginBottom: 0 }]}>Savings & Investments</Text>
+                                </View>
 
-                            <Text style={[styles.fieldLabel, { color: theme.icon }]}>Fixed Obligations: EMI (INR)</Text>
-                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F3F4F6', borderColor: theme.border }]}>
-                                <Ionicons name="card-outline" size={18} color={theme.icon} style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, { color: theme.text }]}
-                                    value={emiInput}
-                                    onChangeText={setEmiInput}
-                                    placeholder="e.g. 12000"
-                                    placeholderTextColor={theme.icon}
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                                <Text style={[styles.fieldLabel, { color: theme.icon }]}>Monthly SIP</Text>
+                                <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F9FAFB', borderColor: theme.border }]}>
+                                    <Text style={[styles.currencyPrefix, { color: theme.icon }]}>₹</Text>
+                                    <TextInput
+                                        style={[styles.input, { color: theme.text }]}
+                                        value={sipInput}
+                                        onChangeText={(v) => setSipInput(formatINR(v))}
+                                        placeholder="0"
+                                        placeholderTextColor={theme.icon}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
 
-                            <Text style={[styles.fieldLabel, { color: theme.icon }]}>Fixed Obligations: Other (rent/utilities)</Text>
-                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F3F4F6', borderColor: theme.border }]}>
-                                <Ionicons name="home-outline" size={18} color={theme.icon} style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, { color: theme.text }]}
-                                    value={fixedOtherInput}
-                                    onChangeText={setFixedOtherInput}
-                                    placeholder="e.g. 8000"
-                                    placeholderTextColor={theme.icon}
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                                <Text style={[styles.fieldLabel, { color: theme.icon }]}>Mutual Funds</Text>
+                                <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F9FAFB', borderColor: theme.border }]}>
+                                    <Text style={[styles.currencyPrefix, { color: theme.icon }]}>₹</Text>
+                                    <TextInput
+                                        style={[styles.input, { color: theme.text }]}
+                                        value={mutualFundsInput}
+                                        onChangeText={(v) => setMutualFundsInput(formatINR(v))}
+                                        placeholder="0"
+                                        placeholderTextColor={theme.icon}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
 
-                            <Text style={[styles.sectionLabel, { color: theme.icon }]}>Savings & Investments</Text>
+                                <Text style={[styles.fieldLabel, { color: theme.icon }]}>Other Savings</Text>
+                                <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F9FAFB', borderColor: theme.border }]}>
+                                    <Text style={[styles.currencyPrefix, { color: theme.icon }]}>₹</Text>
+                                    <TextInput
+                                        style={[styles.input, { color: theme.text }]}
+                                        value={otherSavingsInput}
+                                        onChangeText={(v) => setOtherSavingsInput(formatINR(v))}
+                                        placeholder="0"
+                                        placeholderTextColor={theme.icon}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
 
-                            <Text style={[styles.fieldLabel, { color: theme.icon }]}>SIP (INR)</Text>
-                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F3F4F6', borderColor: theme.border }]}>
-                                <Ionicons name="trending-up-outline" size={18} color={theme.icon} style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, { color: theme.text }]}
-                                    value={sipInput}
-                                    onChangeText={setSipInput}
-                                    placeholder="e.g. 5000"
-                                    placeholderTextColor={theme.icon}
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            <Text style={[styles.fieldLabel, { color: theme.icon }]}>Mutual Funds (INR)</Text>
-                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F3F4F6', borderColor: theme.border }]}>
-                                <Ionicons name="stats-chart-outline" size={18} color={theme.icon} style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, { color: theme.text }]}
-                                    value={mutualFundsInput}
-                                    onChangeText={setMutualFundsInput}
-                                    placeholder="e.g. 3000"
-                                    placeholderTextColor={theme.icon}
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            <Text style={[styles.fieldLabel, { color: theme.icon }]}>Other Savings (INR)</Text>
-                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#F3F4F6', borderColor: theme.border }]}>
-                                <Ionicons name="save-outline" size={18} color={theme.icon} style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, { color: theme.text }]}
-                                    value={otherSavingsInput}
-                                    onChangeText={setOtherSavingsInput}
-                                    placeholder="e.g. 2000"
-                                    placeholderTextColor={theme.icon}
-                                    keyboardType="numeric"
-                                />
+                                <View style={[styles.calcRow, { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 12, marginTop: 4 }]}>
+                                    <Text style={[styles.calcLabel, { color: theme.icon }]}>Total Target Savings</Text>
+                                    <Text style={[styles.calcValue, { color: theme.text }]}>₹{formatINR(toNumber(sipInput) + toNumber(mutualFundsInput) + toNumber(otherSavingsInput)) || '0'}</Text>
+                                </View>
                             </View>
 
                             <TouchableOpacity
-                                style={[styles.saveBtn, { backgroundColor: theme.tint }]}
+                                style={[styles.saveBtn, { backgroundColor: theme.income, marginTop: 24, shadowColor: theme.tint, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }]}
                                 onPress={handleSaveFinancialPlan}
                                 activeOpacity={0.8}
                             >
                                 <Text style={styles.saveBtnText}>Save Financial Plan</Text>
                             </TouchableOpacity>
-                            <View style={{ height: 24 }} />
+                            {/* <View style={{ height: 40 }} /> */}
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {showToast && (
+                <Animated.View style={[
+                    styles.toastContainer, 
+                    { opacity: fadeAnim, backgroundColor: toastType === 'error' ? theme.danger : (toastType === 'success' ? '#10B981' : '#333') }
+                ]}>
+                    <Ionicons 
+                        name={toastType === 'success' ? 'checkmark-circle' : (toastType === 'error' ? 'alert-circle' : 'information-circle')} 
+                        size={20} 
+                        color="#fff" 
+                    />
+                    <Text style={styles.toastText}>{toastMessage}</Text>
+                </Animated.View>
+            )}
         </View>
     );
 }
@@ -979,49 +1078,45 @@ const styles = StyleSheet.create({
         paddingTop: Platform.OS === 'android' ? 20 : 0,
     },
     header: {
-        padding: 24,
-        paddingTop: 60,
+        padding: 16,
+        paddingTop: 10,
         alignItems: 'center',
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 5,
+
         position: 'relative',
     },
     avatarContainer: {
-        marginBottom: 16,
+        marginBottom: 12,
         position: 'relative',
     },
     avatarGradient: {
-        padding: 4,
-        borderRadius: 60,
+        padding: 3,
+        borderRadius: 40,
     },
     avatar: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        borderWidth: 4,
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        borderWidth: 3,
     },
     onlineBadge: {
         position: 'absolute',
-        bottom: 8,
-        right: 8,
-        width: 16,
-        height: 16,
-        borderRadius: 8,
+        bottom: 2,
+        right: 2,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
         backgroundColor: '#10B981',
         borderWidth: 2,
         borderColor: '#FFF',
     },
     headerInfo: {
         alignItems: 'center',
-        gap: 6,
+        gap: 2,
     },
     name: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: '700',
     },
     badgeContainer: {
@@ -1040,10 +1135,10 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     editProfileBtn: {
-        marginTop: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
+        marginTop: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 18,
         borderWidth: 1,
     },
     editProfileText: {
@@ -1051,18 +1146,22 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     statsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         paddingHorizontal: 20,
-        paddingVertical: 24,
+        paddingVertical: 8,
         gap: 12,
+        justifyContent: 'space-between',
     },
     statCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
-        borderRadius: 20,
-        gap: 12,
-        minWidth: 160,
+        padding: 12,
+        borderRadius: 18,
+        gap: 8,
+        width: '48%',
         borderWidth: 1,
+        marginBottom: 2,
     },
     statIcon: {
         width: 40,
@@ -1072,7 +1171,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     statLabel: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '500',
     },
     statValue: {
@@ -1145,6 +1244,41 @@ const styles = StyleSheet.create({
         fontSize: 13,
         opacity: 0.5,
     },
+    // Prominent Button
+    prominentBtn: {
+        marginHorizontal: 20,
+        marginBottom: 10,
+        borderRadius: 10,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: "#ddd",
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        gap: 16,
+    },
+    prominentIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    prominentTextContainer: {
+        flex: 1,
+    },
+    prominentTitle: {
+        color: '#333',
+        fontSize: 17,
+        fontWeight: '700',
+    },
+    prominentSubtitle: {
+        color: '#333',
+        fontSize: 12,
+        marginTop: 2,
+    },
     // Modal styles
     modalOverlay: {
         flex: 1,
@@ -1187,7 +1321,7 @@ const styles = StyleSheet.create({
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 14,
+        borderRadius: 10,
         borderWidth: 1,
         paddingHorizontal: 14,
         marginBottom: 18,
@@ -1218,10 +1352,10 @@ const styles = StyleSheet.create({
     },
     saveBtn: {
         height: 54,
-        borderRadius: 16,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 8,
+        marginTop: 0,
     },
     saveBtnText: {
         color: '#fff',
@@ -1305,5 +1439,55 @@ const styles = StyleSheet.create({
     privacyBody: {
         fontSize: 14,
         lineHeight: 22,
+    },
+    modalContentCard: {
+        marginBottom: 6,
+    },
+    modalSectionTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 8,
+    },
+    currencyPrefix: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginRight: 8,
+    },
+    calcRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    calcLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    calcValue: {
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    toastContainer: {
+        position: 'absolute',
+        bottom: 20,
+        left: 20,
+        right: 20,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 6,
+        zIndex: 9999,
+    },
+    toastText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+        flex: 1,
     },
 });

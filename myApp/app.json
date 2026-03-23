@@ -90,7 +90,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyB0B_zGjFX2fXXq_JHbkS-oD_PGHGgg3VA"
+          "apiKey": "[GCP_API_KEY]"
         }
       }
     },
