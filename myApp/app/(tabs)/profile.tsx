@@ -93,6 +93,7 @@ export default function ProfileScreen() {
     // ── Help Center & Privacy Policy ─────────────────────────────
     const [helpVisible, setHelpVisible] = useState(false);
     const [privacyVisible, setPrivacyVisible] = useState(false);
+    const [notificationsVisible, setNotificationsVisible] = useState(false);
 
     // ── Financial Plan ────────────────────────────────────────────
     const [financialPlanVisible, setFinancialPlanVisible] = useState(false);
@@ -528,70 +529,7 @@ export default function ProfileScreen() {
                 </View>
 
 
-                {/* Notifications Section */}
                 <View style={styles.settingsContainer}>
-                    {!hasPermission ? (
-                        <Section title="Notifications">
-                            <TouchableOpacity
-                                style={[styles.permissionBanner, { backgroundColor: theme.warning + '15' }]}
-                                onPress={openPermissionSettings}
-                            >
-                                <Ionicons name="notifications-off-outline" size={24} color={theme.warning} />
-                                <View style={styles.permissionTextContainer}>
-                                    <Text style={[styles.permissionTitle, { color: theme.text }]}>Notification Access Disabled</Text>
-                                    <Text style={[styles.permissionSubtitle, { color: theme.icon }]}>Tap to enable reading phone notifications</Text>
-                                </View>
-                                <Ionicons name="chevron-forward" size={20} color={theme.warning} />
-                            </TouchableOpacity>
-                        </Section>
-                    ) : (
-                        <Section title={`Phone Notifications (${notifications.length})`}>
-                            {notifications.length === 0 ? (
-                                <View style={styles.emptyNotifs}>
-                                    <Ionicons name="notifications-outline" size={32} color={theme.icon} style={{ opacity: 0.5 }} />
-                                    <Text style={[styles.emptyNotifsText, { color: theme.icon }]}>No notifications yet</Text>
-                                </View>
-                            ) : (
-                                <>
-                                    {notifications.slice(0, 5).map((notif) => (
-                                        <View key={notif.id}>
-                                            <View style={styles.notifItem}>
-                                                <View style={[styles.notifIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}>
-                                                    <Text style={{ fontSize: 18 }}>🔔</Text>
-                                                </View>
-                                                <View style={styles.notifContent}>
-                                                    <View style={styles.notifHeader}>
-                                                        <Text style={[styles.notifApp, { color: theme.tint }]} numberOfLines={1}>{notif.appName}</Text>
-                                                        <Text style={[styles.notifTime, { color: theme.icon }]}>
-                                                            {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                        </Text>
-                                                    </View>
-                                                    <Text style={[styles.notifTitle, { color: theme.text }]} numberOfLines={1}>{notif.title}</Text>
-                                                    <Text style={[styles.notifText, { color: theme.icon }]} numberOfLines={2}>{notif.text}</Text>
-                                                </View>
-                                                <TouchableOpacity onPress={() => clearOne(notif.id)} style={styles.notifDelete}>
-                                                    <Ionicons name="close" size={16} color={theme.icon} />
-                                                </TouchableOpacity>
-                                            </View>
-                                            <View style={[styles.separator, { backgroundColor: theme.border }]} />
-                                        </View>
-                                    ))}
-                                    {notifications.length > 5 && (
-                                        <TouchableOpacity style={styles.viewMoreBtn}>
-                                            <Text style={[styles.viewMoreText, { color: theme.tint }]}>+ {notifications.length - 5} more</Text>
-                                        </TouchableOpacity>
-                                    )}
-                                    <TouchableOpacity
-                                        style={styles.clearAllBtn}
-                                        onPress={clearAll}
-                                    >
-                                        <Text style={[styles.clearAllText, { color: theme.danger }]}>Clear All</Text>
-                                    </TouchableOpacity>
-                                </>
-                            )}
-                        </Section>
-                    )}
-
                     <Section title="Preferences">
                         <SettingItem
                             icon={isDark ? "moon" : "sunny"}
@@ -607,7 +545,7 @@ export default function ProfileScreen() {
                             title="Notifications"
                             subtitle="Email, Push"
                             color={theme.expense}
-                            onPress={() => { }}
+                            onPress={() => setNotificationsVisible(true)}
                         />
                         <View style={[styles.separator, { backgroundColor: theme.border }]} />
                         <SettingItem
@@ -919,6 +857,78 @@ export default function ProfileScreen() {
                 </View>
             </Modal>
 
+            {/* ── Notifications Modal ───────────────────────────────── */}
+            <Modal visible={notificationsVisible} animationType="slide" transparent onRequestClose={() => setNotificationsVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContainer, { backgroundColor: theme.card }]}>
+                        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+                            <TouchableOpacity onPress={() => setNotificationsVisible(false)} style={styles.modalCloseBtn}>
+                                <Ionicons name="close" size={24} color={theme.text} />
+                            </TouchableOpacity>
+                            <Text style={[styles.modalTitle, { color: theme.text }]}>Notifications</Text>
+                            <View style={{ width: 36 }} />
+                        </View>
+                        <ScrollView contentContainerStyle={styles.modalBody}>
+                           {!hasPermission ? (
+                                <TouchableOpacity
+                                    style={[styles.permissionBanner, { backgroundColor: theme.warning + '15' }]}
+                                    onPress={openPermissionSettings}
+                                >
+                                    <Ionicons name="notifications-off-outline" size={24} color={theme.warning} />
+                                    <View style={styles.permissionTextContainer}>
+                                        <Text style={[styles.permissionTitle, { color: theme.text }]}>Notification Access Disabled</Text>
+                                        <Text style={[styles.permissionSubtitle, { color: theme.icon }]}>Tap to enable reading phone notifications</Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={20} color={theme.warning} />
+                                </TouchableOpacity>
+                            ) : (
+                                <>
+                                    {notifications.length === 0 ? (
+                                        <View style={styles.emptyNotifs}>
+                                            <Ionicons name="notifications-outline" size={32} color={theme.icon} style={{ opacity: 0.5 }} />
+                                            <Text style={[styles.emptyNotifsText, { color: theme.icon }]}>No notifications yet</Text>
+                                        </View>
+                                    ) : (
+                                        <>
+                                            {notifications.map((notif) => (
+                                                <View key={notif.id}>
+                                                    <View style={styles.notifItem}>
+                                                        <View style={[styles.notifIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}>
+                                                            <Text style={{ fontSize: 18 }}>🔔</Text>
+                                                        </View>
+                                                        <View style={styles.notifContent}>
+                                                            <View style={styles.notifHeader}>
+                                                                <Text style={[styles.notifApp, { color: theme.tint }]} numberOfLines={1}>{notif.appName}</Text>
+                                                                <Text style={[styles.notifTime, { color: theme.icon }]}>
+                                                                    {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                </Text>
+                                                            </View>
+                                                            <Text style={[styles.notifTitle, { color: theme.text }]} numberOfLines={1}>{notif.title}</Text>
+                                                            <Text style={[styles.notifText, { color: theme.icon }]} numberOfLines={2}>{notif.text}</Text>
+                                                        </View>
+                                                        <TouchableOpacity onPress={() => clearOne(notif.id)} style={styles.notifDelete}>
+                                                            <Ionicons name="close" size={16} color={theme.icon} />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                    <View style={[styles.separator, { backgroundColor: theme.border }]} />
+                                                </View>
+                                            ))}
+                                            <TouchableOpacity
+                                                style={styles.clearAllBtn}
+                                                onPress={clearAll}
+                                            >
+                                                <Text style={[styles.clearAllText, { color: theme.danger }]}>Clear All</Text>
+                                            </TouchableOpacity>
+                                        </>
+                                    )}
+                                </>
+                            )}
+                            <View style={{ height: 32 }} />
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
             {/* ── Privacy Policy Modal ────────────────────────────────── */}
             <Modal visible={privacyVisible} animationType="slide" transparent onRequestClose={() => setPrivacyVisible(false)}>
                 <View style={styles.modalOverlay}>
@@ -1221,7 +1231,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        borderRadius: 18,
+        borderRadius: 10,
         gap: 8,
         width: '48%',
         borderWidth: 1,
