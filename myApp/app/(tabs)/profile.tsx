@@ -25,6 +25,7 @@ import { Colors } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useTransactions } from '@/context/TransactionContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
 
 const getProfileImage = (name?: string) => {
@@ -69,6 +70,7 @@ export default function ProfileScreen() {
     const { theme: currentTheme, toggleTheme } = useTheme();
     const { user, logout, updateProfile } = useAuth();
     const { financialPlan, updateFinancialPlan, getWeeklyBudgetAllocation, getFinancialHealth } = useTransactions();
+    const { notifications, hasPermission, clearAll, clearOne, openPermissionSettings, isLoading: isNotifLoading } = useNotifications();
     const router = useRouter();
     const theme = Colors[currentTheme];
     const isDark = currentTheme === 'dark';
@@ -526,8 +528,70 @@ export default function ProfileScreen() {
                 </View>
 
 
-                {/* Settings */}
+                {/* Notifications Section */}
                 <View style={styles.settingsContainer}>
+                    {!hasPermission ? (
+                        <Section title="Notifications">
+                            <TouchableOpacity
+                                style={[styles.permissionBanner, { backgroundColor: theme.warning + '15' }]}
+                                onPress={openPermissionSettings}
+                            >
+                                <Ionicons name="notifications-off-outline" size={24} color={theme.warning} />
+                                <View style={styles.permissionTextContainer}>
+                                    <Text style={[styles.permissionTitle, { color: theme.text }]}>Notification Access Disabled</Text>
+                                    <Text style={[styles.permissionSubtitle, { color: theme.icon }]}>Tap to enable reading phone notifications</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color={theme.warning} />
+                            </TouchableOpacity>
+                        </Section>
+                    ) : (
+                        <Section title={`Phone Notifications (${notifications.length})`}>
+                            {notifications.length === 0 ? (
+                                <View style={styles.emptyNotifs}>
+                                    <Ionicons name="notifications-outline" size={32} color={theme.icon} style={{ opacity: 0.5 }} />
+                                    <Text style={[styles.emptyNotifsText, { color: theme.icon }]}>No notifications yet</Text>
+                                </View>
+                            ) : (
+                                <>
+                                    {notifications.slice(0, 5).map((notif) => (
+                                        <View key={notif.id}>
+                                            <View style={styles.notifItem}>
+                                                <View style={[styles.notifIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}>
+                                                    <Text style={{ fontSize: 18 }}>🔔</Text>
+                                                </View>
+                                                <View style={styles.notifContent}>
+                                                    <View style={styles.notifHeader}>
+                                                        <Text style={[styles.notifApp, { color: theme.tint }]} numberOfLines={1}>{notif.appName}</Text>
+                                                        <Text style={[styles.notifTime, { color: theme.icon }]}>
+                                                            {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={[styles.notifTitle, { color: theme.text }]} numberOfLines={1}>{notif.title}</Text>
+                                                    <Text style={[styles.notifText, { color: theme.icon }]} numberOfLines={2}>{notif.text}</Text>
+                                                </View>
+                                                <TouchableOpacity onPress={() => clearOne(notif.id)} style={styles.notifDelete}>
+                                                    <Ionicons name="close" size={16} color={theme.icon} />
+                                                </TouchableOpacity>
+                                            </View>
+                                            <View style={[styles.separator, { backgroundColor: theme.border }]} />
+                                        </View>
+                                    ))}
+                                    {notifications.length > 5 && (
+                                        <TouchableOpacity style={styles.viewMoreBtn}>
+                                            <Text style={[styles.viewMoreText, { color: theme.tint }]}>+ {notifications.length - 5} more</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity
+                                        style={styles.clearAllBtn}
+                                        onPress={clearAll}
+                                    >
+                                        <Text style={[styles.clearAllText, { color: theme.danger }]}>Clear All</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                        </Section>
+                    )}
+
                     <Section title="Preferences">
                         <SettingItem
                             icon={isDark ? "moon" : "sunny"}
@@ -614,7 +678,7 @@ export default function ProfileScreen() {
             >
                 <KeyboardAvoidingView
                     style={styles.modalOverlay}
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    // behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
                     <View style={[styles.modalContainer, { backgroundColor: theme.card }]}>
                         {/* Modal Header */}
@@ -1489,5 +1553,94 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         flex: 1,
+    },
+    // Notifications styles
+    permissionBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 14,
+        gap: 12,
+    },
+    permissionTextContainer: {
+        flex: 1,
+    },
+    permissionTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    permissionSubtitle: {
+        fontSize: 13,
+    },
+    emptyNotifs: {
+        alignItems: 'center',
+        paddingVertical: 30,
+        gap: 10,
+    },
+    emptyNotifsText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    notifItem: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        gap: 12,
+        alignItems: 'flex-start',
+    },
+    notifIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    notifContent: {
+        flex: 1,
+    },
+    notifHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 2,
+    },
+    notifApp: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    notifTime: {
+        fontSize: 11,
+    },
+    notifTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    notifText: {
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    notifDelete: {
+        padding: 4,
+        marginTop: 4,
+    },
+    clearAllBtn: {
+        paddingVertical: 16,
+        alignItems: 'center',
+    },
+    clearAllText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    viewMoreBtn: {
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    viewMoreText: {
+        fontSize: 13,
+        fontWeight: '600',
     },
 });

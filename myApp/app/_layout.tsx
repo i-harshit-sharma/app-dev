@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { TransactionProvider } from '@/context/TransactionContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { NotificationProvider } from '@/context/NotificationContext';
 
 import { ShareHandler } from '@/components/ShareHandler';
 import { Colors } from '@/constants/theme';
@@ -59,7 +60,9 @@ export default function RootLayout() {
     <AuthProvider>
       <TransactionProvider>
         <ThemeProvider>
-          <RootLayoutNav />
+          <NotificationProvider>
+            <RootLayoutNav />
+          </NotificationProvider>
         </ThemeProvider>
       </TransactionProvider>
     </AuthProvider>

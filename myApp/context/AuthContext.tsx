@@ -58,20 +58,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log("[AuthContext] Bootstrapping Auth");
       try {
         const savedToken = await getStoredToken();
-        if (savedToken) {
+        if (savedToken && savedToken !== "null" && savedToken !== "undefined") {
           console.log("[AuthContext] Found saved token, verifying...");
-          // Verify token is still valid
-          const response = await AuthService.getMe(savedToken);
-          if (response.success) {
-            console.log("[AuthContext] Token valid, user restored:", response.user?.email);
-            setToken(savedToken);
-            setUser(response.user);
-          } else {
-            console.log("[AuthContext] Token invalid, clearing stored token");
+          try {
+            const response = await AuthService.getMe(savedToken);
+            if (response.success) {
+              console.log("[AuthContext] Token valid, user restored:", response.user?.email);
+              setToken(savedToken);
+              setUser(response.user);
+            } else {
+              console.log("[AuthContext] Token invalid (success: false), clearing stored token");
+              await clearStoredToken();
+            }
+          } catch (verificationError) {
+            console.log("[AuthContext] Token verification error, clearing stored token:", verificationError);
             await clearStoredToken();
           }
         } else {
-          console.log("[AuthContext] No saved token found");
+          console.log("[AuthContext] No saved token found or token was invalid string");
+          if (savedToken) await clearStoredToken();
         }
       } catch (error) {
         console.error("[AuthContext] Failed to restore token:", error);
