@@ -1,7 +1,7 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { createMaterialTopTabNavigator, MaterialTopTabNavigationEventMap, MaterialTopTabNavigationOptions } from '@react-navigation/material-top-tabs';
 import { ParamListBase, TabNavigationState } from '@react-navigation/native';
-import { withLayoutContext } from 'expo-router';
+import { withLayoutContext, Redirect } from 'expo-router';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -19,11 +19,18 @@ export const MaterialTopTabs = withLayoutContext<
 >(Navigator);
 
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function TabLayout() {
   const { theme: currentTheme } = useTheme();
   const theme = Colors[currentTheme];
-  const colorScheme = currentTheme;
+  const { isSignedIn, isLoading } = useAuth();
+
+  if (isLoading) return null;
+
+  if (!isSignedIn) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -66,35 +73,35 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Home',
-            tabBarIcon: ({ color }) => <Ionicons size={24} name="home" color={color} />,
+            tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? 'home' : 'home-outline'} color={color} />,
           }}
         />
         <MaterialTopTabs.Screen
           name="explore"
           options={{
             title: 'Trends',
-            tabBarIcon: ({ color }) => <Ionicons size={24} name="stats-chart" color={color} />,
+            tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? 'analytics' : 'analytics-outline'} color={color} />,
           }}
         />
         <MaterialTopTabs.Screen
           name="chat"
           options={{
             title: 'AI Chat',
-            tabBarIcon: ({ color }) => <MaterialCommunityIcons name="robot" size={24} color={color} />,
+            tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? 'sparkles' : 'sparkles-outline'} color={color} />,
           }}
         />
         <MaterialTopTabs.Screen
           name="budget"
           options={{
             title: 'Budget',
-            tabBarIcon: ({ color }) => <Ionicons size={24} name="pie-chart" color={color} />,
+            tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? 'wallet' : 'wallet-outline'} color={color} />,
           }}
         />
         <MaterialTopTabs.Screen
           name="profile"
           options={{
             title: 'Profile',
-            tabBarIcon: ({ color }) => <Ionicons size={24} name="person" color={color} />
+            tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? 'person-circle' : 'person-circle-outline'} color={color} />
           }}
         />
 

@@ -18,7 +18,7 @@ import { ActivityIndicator, Text, TouchableOpacity, View, StyleSheet } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  initialRouteName: 'index',
 };
 
 type LockState = 'checking' | 'locked' | 'unlocked';

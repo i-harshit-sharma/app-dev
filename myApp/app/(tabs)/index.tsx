@@ -1,7 +1,7 @@
 import FinancialHealthCard from '@/components/home/FinancialHealthCard';
 import InsightCard from '@/components/home/InsightCard';
 import TransactionItem from '@/components/home/TransactionItem';
-import SearchBar from '@/components/SearchBar';
+// import SearchBar from '@/components/SearchBar'; // Removed SearchBar as per request
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -27,8 +27,8 @@ export default function HomeScreen() {
   const [goalCurrentSaved, setGoalCurrentSaved] = useState('');
   const [goalYears, setGoalYears] = useState('2');
   const [homeAiTip, setHomeAiTip] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchInputRef, setSearchInputRef] = useState<TextInput | null>(null);
+  // const [searchQuery, setSearchQuery] = useState(''); // Removed search state
+  // const [searchInputRef, setSearchInputRef] = useState<TextInput | null>(null); // Removed search ref
 
   useFocusEffect(
     useCallback(() => {
@@ -37,14 +37,14 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    const subscription = DeviceEventEmitter.addListener('home_search_focus', () => {
-      searchInputRef?.focus();
+    const subscription = DeviceEventEmitter.addListener('generate_insight', () => {
+      reloadInsights();
     });
 
     return () => {
       subscription.remove();
     };
-  }, [searchInputRef]);
+  }, []);
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -53,9 +53,6 @@ export default function HomeScreen() {
   const handleNextMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
-
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-
   // Month-filtered transactions used for default home view.
   const monthFilteredData = useMemo(() => {
     const targetMonth = currentDate.getMonth();
@@ -69,54 +66,8 @@ export default function HomeScreen() {
       .sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [currentDate, expenses]);
 
-  const transactionSections = useMemo(() => {
-    if (!normalizedQuery) {
-      return monthFilteredData;
-    }
+  const transactionSections = monthFilteredData; // Since search is removed, always show month filtered data
 
-    return expenses
-      .map((group) => {
-        const data = group.items.filter((item) => {
-          const haystack = [
-            item.title,
-            item.subtitle,
-            item.category,
-            item.paymentMethod,
-            item.note,
-            item.location,
-            item.type,
-            String(Math.round(item.amount)),
-            group.date.toLocaleDateString('en-IN', { month: 'short', day: '2-digit', year: 'numeric' }),
-          ]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase();
-
-          return haystack.includes(normalizedQuery);
-        });
-
-        return { ...group, data };
-      })
-      .filter((group) => group.data.length > 0)
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [expenses, monthFilteredData, normalizedQuery]);
-
-  const filteredGoals = useMemo(() => {
-    if (!normalizedQuery) return [];
-
-    return goals.filter((goal) => {
-      const haystack = [
-        goal.title,
-        String(Math.round(goal.targetAmount)),
-        String(Math.round(goal.currentSaved)),
-        new Date(goal.targetDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
-      ]
-        .join(' ')
-        .toLowerCase();
-
-      return haystack.includes(normalizedQuery);
-    });
-  }, [goals, normalizedQuery]);
 
   // Calculate Summary & Trends from shared context
   const { summary, trends, expensesByMethod, aiTip } = useMemo(() => {
@@ -178,37 +129,32 @@ export default function HomeScreen() {
   const primaryGoal = goals[0];
   const primaryGoalPlan = primaryGoal ? getGoalPlan(primaryGoal.id) : null;
 
-  useEffect(() => {
-    let mounted = true;
+  const reloadInsights = useCallback(async () => {
+    const fallbackInsights = [
+      aiTip,
+      `This month net is ₹${Math.round(summary.total).toLocaleString('en-IN')}. Keep daily pace aligned with budget to protect runway.`,
+    ];
 
-    (async () => {
-      const fallbackInsights = [
-        aiTip,
-        `This month net is ₹${Math.round(summary.total).toLocaleString('en-IN')}. Keep daily pace aligned with budget to protect runway.`,
-      ];
+    const result = await InsightFeedService.getLaunchInsights({
+      userId: user?.id,
+      contextSummary: [
+        `Month: ${formattedMonth}`,
+        `Income: ₹${Math.round(summary.income).toLocaleString('en-IN')}`,
+        `Expense: ₹${Math.round(summary.expense).toLocaleString('en-IN')}`,
+        `Budget: ₹${Math.round(financialPlan.monthlyBudget).toLocaleString('en-IN')}`,
+        `Financial health score: ${Math.round(getFinancialHealth(currentDate).score)}`,
+        `Safe to spend today: ₹${Math.round(getSafeToSpend(currentDate).safeToSpendToday).toLocaleString('en-IN')}`,
+      ].join('\n'),
+      fallbackInsights,
+      count: 2,
+    });
 
-      const result = await InsightFeedService.getLaunchInsights({
-        userId: user?.id,
-        contextSummary: [
-          `Month: ${formattedMonth}`,
-          `Income: ₹${Math.round(summary.income).toLocaleString('en-IN')}`,
-          `Expense: ₹${Math.round(summary.expense).toLocaleString('en-IN')}`,
-          `Budget: ₹${Math.round(financialPlan.monthlyBudget).toLocaleString('en-IN')}`,
-          `Financial health score: ${Math.round(getFinancialHealth(currentDate).score)}`,
-          `Safe to spend today: ₹${Math.round(getSafeToSpend(currentDate).safeToSpendToday).toLocaleString('en-IN')}`,
-        ].join('\n'),
-        fallbackInsights,
-        count: 2,
-      });
-
-      if (!mounted) return;
-      setHomeAiTip(result.insights.join(' '));
-    })();
-
-    return () => {
-      mounted = false;
-    };
+    setHomeAiTip(result.insights.join(' '));
   }, [aiTip, currentDate, financialPlan.monthlyBudget, formattedMonth, getFinancialHealth, getSafeToSpend, summary.expense, summary.income, summary.total, user?.id]);
+
+  useEffect(() => {
+    reloadInsights();
+  }, [reloadInsights]);
 
   const handleSaveGoal = async () => {
     const targetAmount = Number(goalTargetAmount.replace(/,/g, '').trim());
@@ -250,40 +196,12 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}> 
       <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} />
 
-      <SearchBar value={searchQuery} onChangeText={setSearchQuery} inputRef={setSearchInputRef} />
+      {/* SearchBar removed as per request */}
 
-      {normalizedQuery ? (
-        <View style={[styles.searchMetaCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.searchMetaTitle, { color: theme.text }]}>Search Results</Text>
-          <Text style={[styles.searchMetaText, { color: theme.icon }]}>
-            {transactionSections.reduce((sum, section: any) => sum + section.data.length, 0)} transaction match(es) • {filteredGoals.length} goal match(es)
-          </Text>
-        </View>
-      ) : null}
 
-      {normalizedQuery ? (
-        <View style={[styles.goalCard, { backgroundColor: theme.card, borderColor: theme.border, marginTop: 0 }]}> 
-          <Text style={[styles.goalTitle, { color: theme.text }]}>Goal Matches</Text>
-          {filteredGoals.length ? filteredGoals.map((goal) => (
-            <View key={goal.id} style={styles.goalSearchRow}>
-              <Text style={[styles.goalName, { color: theme.text }]}>{goal.title}</Text>
-              <Text style={[styles.goalHint, { color: theme.icon }]}>Target ₹{Math.round(goal.targetAmount).toLocaleString('en-IN')} • Saved ₹{Math.round(goal.currentSaved).toLocaleString('en-IN')}</Text>
-            </View>
-          )) : (
-            <Text style={[styles.goalHint, { color: theme.icon }]}>No goals matched this search.</Text>
-          )}
-        </View>
-      ) : null}
-
-      {normalizedQuery ? (
-        <View style={{ paddingHorizontal: 20, marginTop: 8, marginBottom: 4 }}>
-          <Text style={[styles.feedTitle, { color: theme.text }]}>Transaction Matches</Text>
-        </View>
-      ) : null}
 
       {/* Date Header */}
-      {!normalizedQuery ? (
-        <View style={styles.header}>
+      <View style={styles.header}>
           <TouchableOpacity onPress={handlePrevMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
@@ -300,7 +218,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      ) : null}
 
       <SectionList
         sections={transactionSections as any}
@@ -311,8 +228,8 @@ export default function HomeScreen() {
             onAskAI={() => console.log('Ask AI about:', item.title)}
           />
         )}
-        renderSectionHeader={normalizedQuery ? undefined : renderSectionHeader}
-        ListHeaderComponent={!normalizedQuery ? (
+        renderSectionHeader={renderSectionHeader}
+        ListHeaderComponent={(
           <View>
             {/* Financial Health Card */}
             <FinancialHealthCard
@@ -355,18 +272,17 @@ export default function HomeScreen() {
 
 
 
-            {/* Feed Title */}
             <View style={{ paddingHorizontal: 20, marginTop: 10, marginBottom: 5 }}>
-              <Text style={[styles.feedTitle, { color: theme.text }]}>{normalizedQuery ? 'Transaction Matches' : 'Transactions'}</Text>
+              <Text style={[styles.feedTitle, { color: theme.text }]}>Transactions</Text>
             </View>
           </View>
-        ) : null}
+        )}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>{normalizedQuery ? 'No matching transactions found' : 'No transactions for this month'}</Text>
+            <Text style={styles.emptyText}>No transactions for this month</Text>
           </View>
         }
-        contentContainerStyle={normalizedQuery ? { paddingBottom: 100, paddingTop: 2 } : { paddingBottom: 100 }} // Space for FAB
+        contentContainerStyle={{ paddingBottom: 100 }} // Space for FAB
         stickySectionHeadersEnabled={false}
       />
     </SafeAreaView>

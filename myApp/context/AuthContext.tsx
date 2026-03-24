@@ -62,12 +62,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           console.log("[AuthContext] Found saved token, verifying...");
           try {
             const response = await AuthService.getMe(savedToken);
-            if (response.success) {
-              console.log("[AuthContext] Token valid, user restored:", response.user?.email);
+            const restoredUser = response?.user;
+            // Validate that the user object has the required fields
+            const isValidUser = restoredUser &&
+              typeof restoredUser.id === "string" && restoredUser.id &&
+              typeof restoredUser.name === "string" && restoredUser.name &&
+              typeof restoredUser.email === "string" && restoredUser.email;
+
+            if (response.success && isValidUser) {
+              console.log("[AuthContext] Token valid, user restored:", restoredUser.email);
               setToken(savedToken);
-              setUser(response.user);
+              setUser(restoredUser);
             } else {
-              console.log("[AuthContext] Token invalid (success: false), clearing stored token");
+              console.log("[AuthContext] Token invalid or user data missing, clearing stored token");
               await clearStoredToken();
             }
           } catch (verificationError) {

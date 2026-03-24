@@ -88,9 +88,9 @@ export default function CustomHeader() {
           {isHomeTab ? (
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => DeviceEventEmitter.emit('home_search_focus')}
+              onPress={() => DeviceEventEmitter.emit('generate_insight')}
             >
-              <Ionicons name="search-outline" size={24} color={theme.text} />
+              <Ionicons name="sparkles-outline" size={24} color={theme.text} />
             </TouchableOpacity>
           ) : null}
 

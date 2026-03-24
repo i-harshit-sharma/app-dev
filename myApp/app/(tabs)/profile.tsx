@@ -408,7 +408,8 @@ export default function ProfileScreen() {
                     onPress: async () => {
                         try {
                             await logout();
-                            router.replace('/login');
+                            // Navigation is handled automatically by _layout.tsx
+                            // which redirects to the login stack when isSignedIn becomes false.
                         } catch (error) {
                             displayToast('Failed to logout', 'error');
                         }
@@ -937,7 +938,7 @@ export default function ProfileScreen() {
                             >
                                 <Text style={styles.saveBtnText}>Contact Support</Text>
                             </TouchableOpacity>
-                            <View style={{ height: 32 }} />
+                            {/* <View style={{ height: 32 }} /> */}
                         </ScrollView>
                     </View>
                 </View>
@@ -1042,7 +1043,7 @@ export default function ProfileScreen() {
                                     <Text style={[styles.privacyBody, { color: theme.icon }]}>{section.body}</Text>
                                 </View>
                             ))}
-                            <View style={{ height: 32 }} />
+                            {/* <View style={{ height: 32 }} /> */}
                         </ScrollView>
                     </View>
                 </View>
