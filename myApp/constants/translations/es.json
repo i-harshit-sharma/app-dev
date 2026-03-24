@@ -1,0 +1,29 @@
+{
+  "profile": {
+    "editProfile": "Editar Perfil",
+    "updateFinancialPlan": "Actualizar Plan Financiero",
+    "setIncome": "Establece tus ingresos, presupuesto y metas de ahorro",
+    "monthlyIncome": "Ingreso Mensual",
+    "monthlyBudget": "Presupuesto Mensual",
+    "weeklyBudget": "Presupuesto Semanal",
+    "healthScore": "Puntaje de Salud",
+    "notifications": "Notificaciones",
+    "notificationAccessDisabled": "Acceso a notificaciones desactivado",
+    "tapToEnable": "Toca para habilitar la lectura de notificaciones",
+    "phoneNotifications": "Notificaciones del Teléfono",
+    "noNotifications": "Aún no hay notificaciones",
+    "clearAll": "Borrar Todo",
+    "preferences": "Preferencias",
+    "darkMode": "Modo Oscuro",
+    "emailPush": "Correo, Push",
+    "language": "Idioma",
+    "security": "Seguridad",
+    "faceId": "Face ID",
+    "changePin": "Cambiar PIN",
+    "support": "Soporte",
+    "helpCenter": "Centro de Ayuda",
+    "privacyPolicy": "Política de Privacidad",
+    "logOut": "Cerrar Sesión",
+    "version": "Versión"
+  }
+}

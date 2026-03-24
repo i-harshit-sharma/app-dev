@@ -157,6 +157,12 @@ jobs:
         working-directory: myApp
         run: npm install
 
+      - name: Inject Build Number
+        working-directory: myApp
+        run: |
+          sed -i "s/export const BUILD_NUMBER = 'dev';/export const BUILD_NUMBER = '${{ github.run_number }}';/" constants/buildInfo.ts
+          echo "Build number set to: ${{ github.run_number }}"
+
       - name: Prebuild Native Files
         working-directory: myApp
         run: npx expo prebuild --platform android

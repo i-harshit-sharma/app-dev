@@ -1,0 +1,29 @@
+{
+  "profile": {
+    "editProfile": "प्रोफ़ाइल संपादित करें",
+    "updateFinancialPlan": "वित्तीय योजना अपडेट करें",
+    "setIncome": "अपनी आय, बजट और बचत लक्ष्य निर्धारित करें",
+    "monthlyIncome": "मासिक आय",
+    "monthlyBudget": "मासिक बजट",
+    "weeklyBudget": "साप्ताहिक बजट",
+    "healthScore": "स्वास्थ्य स्कोर",
+    "notifications": "सूचनाएं",
+    "notificationAccessDisabled": "अधिसूचना पहुंच अक्षम है",
+    "tapToEnable": "फ़ोन सूचनाएं पढ़ने में सक्षम करने के लिए टैप करें",
+    "phoneNotifications": "फ़ोन सूचनाएं",
+    "noNotifications": "अभी तक कोई सूचनाएं नहीं",
+    "clearAll": "सभी साफ़ करें",
+    "preferences": "प्राथमिकताएं",
+    "darkMode": "डार्क मोड",
+    "emailPush": "ईमेल, पुश",
+    "language": "भाषा",
+    "security": "सुरक्षा",
+    "faceId": "फेस आईडी",
+    "changePin": "पिन बदलें",
+    "support": "समर्थन",
+    "helpCenter": "सहायता केंद्र",
+    "privacyPolicy": "गोपनीयता नीति",
+    "logOut": "लॉग आउट",
+    "version": "संस्करण"
+  }
+}

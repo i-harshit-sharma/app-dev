@@ -20,13 +20,20 @@ import {
     Animated,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system';
+import * as LocalAuthentication from 'expo-local-authentication';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 
 import { Colors } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useTransactions } from '@/context/TransactionContext';
 import { useNotifications } from '@/context/NotificationContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'expo-router';
+import i18n from '@/constants/translations';
+import { APP_VERSION, BUILD_NUMBER } from '@/constants/buildInfo';
 
 const getProfileImage = (name?: string) => {
     const displayName = name || 'User';
@@ -68,15 +75,17 @@ async function setPref(key: string, value: string): Promise<boolean> {
 
 export default function ProfileScreen() {
     const { theme: currentTheme, toggleTheme } = useTheme();
-    const { user, logout, updateProfile } = useAuth();
-    const { financialPlan, updateFinancialPlan, getWeeklyBudgetAllocation, getFinancialHealth } = useTransactions();
-    const { notifications, hasPermission, clearAll, clearOne, openPermissionSettings, isLoading: isNotifLoading } = useNotifications();
-    const router = useRouter();
-    const theme = Colors[currentTheme];
+    const theme = Colors[currentTheme as keyof typeof Colors];
     const isDark = currentTheme === 'dark';
+    const { user, logout, updateProfile } = useAuth();
+    const { financialPlan, updateFinancialPlan, getWeeklyBudgetAllocation, getFinancialHealth, exportData, importData } = useTransactions();
+    const { locale, setLanguage } = useLanguage();
+    const { notifications, hasPermission, openPermissionSettings, clearOne, clearAll } = useNotifications();
+    const router = useRouter();
+    const t = (key: string) => i18n.t(key);
 
     // ── Language ──────────────────────────────────────────────────
-    const [selectedLanguage, setSelectedLanguage] = useState(LANGUAGES[0]);
+    const selectedLanguage = LANGUAGES.find(l => l.code === locale) || LANGUAGES[0];
     const [languageVisible, setLanguageVisible] = useState(false);
 
     // ── Face ID ──────────────────────────────────────────────────
@@ -113,14 +122,8 @@ export default function ProfileScreen() {
     useEffect(() => {
         const loadPrefs = async () => {
             try {
-                const savedLang = await getPref(PREF_KEYS.language);
-                if (savedLang) {
-                    const found = LANGUAGES.find(l => l.code === savedLang);
-                    if (found) setSelectedLanguage(found);
-                }
                 const savedFaceId = await getPref(PREF_KEYS.faceId);
                 if (savedFaceId !== null) setFaceIdEnabled(savedFaceId === 'true');
-
             } catch { /* ignore */ }
         };
         loadPrefs();
@@ -200,16 +203,42 @@ export default function ProfileScreen() {
     };
 
     const handleLanguageSelect = async (lang: typeof LANGUAGES[0]) => {
-        setSelectedLanguage(lang);
         setLanguageVisible(false);
-        await setPref(PREF_KEYS.language, lang.code);
+        await setLanguage(lang.code);
     };
 
     const handleFaceIdToggle = async (value: boolean) => {
+        if (value) {
+            try {
+                const hasHardware = await LocalAuthentication.hasHardwareAsync();
+                const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+                if (!hasHardware || !isEnrolled) {
+                    displayToast('App Lock is not available or not enrolled on this device.', 'error');
+                    return;
+                }
+
+                const auth = await LocalAuthentication.authenticateAsync({
+                    promptMessage: 'Authenticate to enable App Lock',
+                    fallbackLabel: 'Use PIN',
+                });
+
+                if (!auth.success) {
+                    displayToast('Authentication failed. App Lock not enabled.', 'error');
+                    return;
+                }
+            } catch (error) {
+                displayToast('An error occurred while enabling App Lock.', 'error');
+                return;
+            }
+        }
+
         setFaceIdEnabled(value);
         await setPref(PREF_KEYS.faceId, String(value));
         if (value) {
-            displayToast('Face ID Enabled. Biometric login ready.', 'success');
+            displayToast('App Lock Enabled. Biometric login ready.', 'success');
+        } else {
+            displayToast('App Lock Disabled.', 'info');
         }
     };
 
@@ -320,6 +349,50 @@ export default function ProfileScreen() {
         }
     };
 
+    const handleExport = async () => {
+        try {
+            const dataStr = await exportData();
+            if (!dataStr) {
+                displayToast('No data to export or error occurred.', 'error');
+                return;
+            }
+            const fileUri = (FileSystem as any).documentDirectory + `finvault_export_${Date.now()}.json`;
+            await FileSystem.writeAsStringAsync(fileUri, dataStr, { encoding: (FileSystem as any).EncodingType.UTF8 });
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(fileUri);
+            } else {
+                displayToast('Sharing is not available on this device', 'error');
+            }
+        } catch (error) {
+            displayToast('Export failed.', 'error');
+        }
+    };
+
+    const handleImport = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/json', '*/*'],
+                copyToCacheDirectory: true,
+            });
+
+            if (result.canceled || !result.assets || result.assets.length === 0) {
+                return;
+            }
+
+            const fileUri = result.assets[0].uri;
+            const dataStr = await FileSystem.readAsStringAsync(fileUri, { encoding: (FileSystem as any).EncodingType.UTF8 });
+            
+            const success = await importData(dataStr);
+            if (success) {
+                displayToast('Data imported successfully!', 'success');
+            } else {
+                displayToast('Failed to import data.', 'error');
+            }
+        } catch (error) {
+            displayToast('Import failed. Invalid file format.', 'error');
+        }
+    };
+
     const handleLogout = () => {
         Alert.alert(
             'Logout',
@@ -352,7 +425,7 @@ export default function ProfileScreen() {
 
     const stats = [
         {
-            label: 'Monthly Income',
+            label: t('profile.monthlyIncome'),
             value: `₹${Math.round(financialPlan.monthlyIncome).toLocaleString('en-IN')}`,
             icon: 'wallet',
             color: theme.emerald,
@@ -360,7 +433,7 @@ export default function ProfileScreen() {
             editable: true,
         },
         {
-            label: 'Monthly Budget',
+            label: t('profile.monthlyBudget'),
             value: `₹${Math.round(financialPlan.monthlyBudget).toLocaleString('en-IN')}`,
             icon: 'cash',
             color: theme.tint,
@@ -368,14 +441,14 @@ export default function ProfileScreen() {
             editable: true,
         },
         {
-            label: 'Weekly Budget',
+            label: t('profile.weeklyBudget'),
             value: `₹${Math.round(weeklyBudget).toLocaleString('en-IN')}`,
             icon: 'calendar-week',
             color: theme.warning,
             editable: false,
         },
         {
-            label: 'Health Score',
+            label: t('profile.healthScore'),
             value: `${Math.round(health.score)}/100`,
             icon: 'heart-pulse',
             color: theme.expense,
@@ -412,7 +485,7 @@ export default function ProfileScreen() {
         >
             <View style={[
                 styles.iconContainer,
-                { backgroundColor: destructive ? theme.dangerLight : (isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6') }
+                { backgroundColor: destructive ? theme.dangerLight : (color ? color + '20' : (isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6')) }
             ]}>
                 <Ionicons
                     name={icon}
@@ -483,7 +556,7 @@ export default function ProfileScreen() {
                             style={[styles.editProfileBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
                             onPress={openEditModal}
                         >
-                            <Text style={[styles.editProfileText, { color: theme.text }]}>Edit Profile</Text>
+                            <Text style={[styles.editProfileText, { color: theme.text }]}>{t('profile.editProfile')}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -494,12 +567,12 @@ export default function ProfileScreen() {
                     onPress={openFinancialPlanModal}
                     activeOpacity={0.85}
                 >
-                    <View style={[styles.prominentIconContainer, { backgroundColor: theme.card }]}>
-                        <Ionicons name="wallet-outline" size={24} color={theme.text} />
+                    <View style={[styles.prominentIconContainer, { backgroundColor: theme.emerald + '10' }]}>
+                        <Ionicons name="wallet-outline" size={24} color={theme.emerald} />
                     </View>
                     <View style={styles.prominentTextContainer}>
-                        <Text style={[styles.prominentTitle, { color: theme.text }]}>Update Financial Plan</Text>
-                        <Text style={[styles.prominentSubtitle, { color: theme.icon }]}>Set your income, budget, and savings targets</Text>
+                        <Text style={[styles.prominentTitle, { color: theme.text }]}>{t('profile.updateFinancialPlan')}</Text>
+                        <Text style={[styles.prominentSubtitle, { color: theme.icon }]}>{t('profile.setIncome')}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={theme.text} />
                 </TouchableOpacity>
@@ -530,10 +603,11 @@ export default function ProfileScreen() {
 
 
                 <View style={styles.settingsContainer}>
-                    <Section title="Preferences">
+
+                    <Section title={t('profile.preferences')}>
                         <SettingItem
                             icon={isDark ? "moon" : "sunny"}
-                            title="Dark Mode"
+                            title={t('profile.darkMode')}
                             isSwitch
                             switchValue={isDark}
                             onSwitchChange={toggleTheme}
@@ -542,51 +616,63 @@ export default function ProfileScreen() {
                         <View style={[styles.separator, { backgroundColor: theme.border }]} />
                         <SettingItem
                             icon="notifications"
-                            title="Notifications"
-                            subtitle="Email, Push"
+                            title={t('profile.notifications')}
+                            subtitle={t('profile.emailPush')}
                             color={theme.expense}
                             onPress={() => setNotificationsVisible(true)}
                         />
                         <View style={[styles.separator, { backgroundColor: theme.border }]} />
                         <SettingItem
                             icon="language"
-                            title="Language"
+                            title={t('profile.language')}
                             subtitle={selectedLanguage.label}
                             color={theme.emerald}
                             onPress={() => setLanguageVisible(true)}
                         />
                     </Section>
 
-                    <Section title="Security">
+                    <Section title={t('profile.security')}>
                         <SettingItem
                             icon="shield-checkmark"
-                            title="Face ID"
+                            title={t('profile.faceId')}
                             isSwitch
                             switchValue={faceIdEnabled}
                             onSwitchChange={handleFaceIdToggle}
                             color={theme.success}
                         />
+                        {/* <View style={[styles.separator, { backgroundColor: theme.border }]} /> */}
+                    </Section>
+
+                    <Section title="Data Management">
+                        <SettingItem
+                            icon="cloud-download-outline"
+                            title="Export Data"
+                            subtitle="Save your data to a file"
+                            color={theme.tint}
+                            onPress={handleExport}
+                        />
                         <View style={[styles.separator, { backgroundColor: theme.border }]} />
                         <SettingItem
-                            icon="key"
-                            title="Change PIN"
-                            color={theme.electricBlue}
-                            onPress={openChangePinModal}
+                            icon="cloud-upload-outline"
+                            title="Import Data"
+                            subtitle="Restore data from a file"
+                            color={theme.warning}
+                            onPress={handleImport}
                         />
                     </Section>
 
-                    <Section title="Support">
+                    <Section title={t('profile.support')}>
                         <SettingItem
                             icon="help-circle"
-                            title="Help Center"
-                            color={theme.text}
+                            title={t('profile.helpCenter')}
+                            color="#8B5CF6"
                             onPress={() => setHelpVisible(true)}
                         />
                         <View style={[styles.separator, { backgroundColor: theme.border }]} />
                         <SettingItem
                             icon="document-text"
-                            title="Privacy Policy"
-                            color={theme.text}
+                            title={t('profile.privacyPolicy')}
+                            color="#0EA5E9"
                             onPress={() => setPrivacyVisible(true)}
                         />
                     </Section>
@@ -597,10 +683,10 @@ export default function ProfileScreen() {
                         onPress={handleLogout}
                     >
                         <Ionicons name="log-out-outline" size={20} color={theme.danger} />
-                        <Text style={[styles.logoutText, { color: theme.danger }]}>Log Out</Text>
+                        <Text style={[styles.logoutText, { color: theme.danger }]}>{t('profile.logOut')}</Text>
                     </TouchableOpacity>
 
-                    <Text style={[styles.version, { color: theme.icon }]}>Version 2.4.0 (Build 305)</Text>
+                    <Text style={[styles.version, { color: theme.icon }]}>{t('profile.version')} {APP_VERSION} (Build {BUILD_NUMBER})</Text>
 
                     {/* Bottom Padding */}
                     {/* <View style={{ height: 100 }} /> */}
@@ -762,7 +848,7 @@ export default function ProfileScreen() {
             </Modal>
 
             {/* ── Change PIN Modal ────────────────────────────────────── */}
-            <Modal visible={pinVisible} animationType="slide" transparent onRequestClose={() => setPinVisible(false)}>
+            {/* <Modal visible={pinVisible} animationType="slide" transparent onRequestClose={() => setPinVisible(false)}>
                 <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
                     <View style={[styles.modalContainer, { backgroundColor: theme.card }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
@@ -816,7 +902,7 @@ export default function ProfileScreen() {
                         </View>
                     </View>
                 </KeyboardAvoidingView>
-            </Modal>
+            </Modal> */}
 
             {/* ── Help Center Modal ───────────────────────────────────── */}
             <Modal visible={helpVisible} animationType="slide" transparent onRequestClose={() => setHelpVisible(false)}>
@@ -890,7 +976,7 @@ export default function ProfileScreen() {
                                         </View>
                                     ) : (
                                         <>
-                                            {notifications.map((notif) => (
+                                            {notifications.map((notif: any) => (
                                                 <View key={notif.id}>
                                                     <View style={styles.notifItem}>
                                                         <View style={[styles.notifIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}>
@@ -1266,7 +1352,7 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
     sectionContainer: {
-        borderRadius: 20,
+        borderRadius: 10,
         overflow: 'hidden',
         borderWidth: 1,
     },
@@ -1334,9 +1420,7 @@ const styles = StyleSheet.create({
     prominentIconContainer: {
         width: 48,
         height: 48,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: '#ddd',
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
     },

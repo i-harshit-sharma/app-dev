@@ -87,7 +87,7 @@ export const initDatabase = async () => {
 
 const addTransactionToDB = async (db: SQLite.SQLiteDatabase, item: any) => {
     await db.runAsync(
-        `INSERT INTO ${TABLE_NAME} (id, userId, title, subtitle, amount, currency, type, icon, color, location, latitude, longitude, time, category, paymentMethod, note, image, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO ${TABLE_NAME} (id, userId, title, subtitle, amount, currency, type, icon, color, location, latitude, longitude, time, category, paymentMethod, note, image, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             item.id,
             item.userId,
@@ -254,5 +254,33 @@ export const getTransactions = async (userId: string): Promise<TransactionGroup[
     } catch (error) {
          console.error('Error fetching transactions:', error);
          return [];
+    }
+};
+
+export const exportAllTransactions = async (userId: string): Promise<DBTransaction[]> => {
+    try {
+        if (!userId) return [];
+        const db = await getDB();
+        return await db.getAllAsync<DBTransaction>(`SELECT * FROM ${TABLE_NAME} WHERE userId = ?`, [userId]);
+    } catch (error) {
+        console.error('Error exporting transactions:', error);
+        return [];
+    }
+};
+
+export const importAllTransactions = async (transactions: DBTransaction[], userId: string) => {
+    try {
+        const db = await getDB();
+        for (const item of transactions) {
+            item.userId = userId;
+            try {
+                await addTransactionToDB(db, item);
+            } catch (e) {
+                console.log('Skipping duplicate or error during import:', e);
+            }
+        }
+    } catch (error) {
+        console.error('Error importing transactions:', error);
+        throw error;
     }
 };

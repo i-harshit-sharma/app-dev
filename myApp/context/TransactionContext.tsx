@@ -1,4 +1,4 @@
-import { addTransaction as addTxToDB, deleteTransaction as deleteTxFromDB, getTransactions as fetchTransactions, initDatabase, updateTransaction as updateTxInDB } from '@/services/DatabaseService';
+import { addTransaction as addTxToDB, deleteTransaction as deleteTxFromDB, getTransactions as fetchTransactions, initDatabase, updateTransaction as updateTxInDB, exportAllTransactions, importAllTransactions } from '@/services/DatabaseService';
 import { useAuth } from '@/context/AuthContext';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
@@ -104,6 +104,8 @@ interface TransactionContextType {
     deleteGoal: (goalId: string) => Promise<boolean>;
     getGoalPlan: (goalId: string, date?: Date) => GoalPlanSnapshot | null;
     refreshTransactions: () => Promise<void>;
+    exportData: () => Promise<string | null>;
+    importData: (jsonStr: string) => Promise<boolean>;
 }
 
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
@@ -505,6 +507,48 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         };
     }, [goals]);
 
+    const exportData = useCallback(async () => {
+        if (!user?.id) return null;
+        try {
+            const dbTransactions = await exportAllTransactions(user.id);
+            const data = {
+                transactions: dbTransactions,
+                financialPlan,
+                goals,
+                netWorth,
+            };
+            return JSON.stringify(data);
+        } catch (error) {
+            console.error("Failed to export data", error);
+            return null;
+        }
+    }, [user?.id, financialPlan, goals, netWorth]);
+
+    const importData = useCallback(async (jsonStr: string) => {
+        if (!user?.id) return false;
+        try {
+            const data = JSON.parse(jsonStr);
+            if (data.transactions && Array.isArray(data.transactions)) {
+                await importAllTransactions(data.transactions, user.id);
+            }
+            if (data.financialPlan) {
+                await updateFinancialPlan(data.financialPlan);
+            }
+            if (data.goals && Array.isArray(data.goals)) {
+                await persistGoals(data.goals);
+                setGoals(data.goals);
+            }
+            if (data.netWorth !== undefined) {
+                await setNetWorth(Number(data.netWorth));
+            }
+            await refreshTransactions();
+            return true;
+        } catch (error) {
+            console.error("Failed to import data", error);
+            return false;
+        }
+    }, [user?.id, updateFinancialPlan, persistGoals, setNetWorth, refreshTransactions]);
+
     return (
         <TransactionContext.Provider
             value={{
@@ -527,6 +571,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
                 deleteGoal,
                 getGoalPlan,
                 refreshTransactions,
+                exportData,
+                importData,
             }}
         >
             {children}

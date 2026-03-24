@@ -1,0 +1,29 @@
+{
+  "profile": {
+    "editProfile": "Edit Profile",
+    "updateFinancialPlan": "Update Financial Plan",
+    "setIncome": "Set your income, budget, and savings targets",
+    "monthlyIncome": "Monthly Income",
+    "monthlyBudget": "Monthly Budget",
+    "weeklyBudget": "Weekly Budget",
+    "healthScore": "Health Score",
+    "notifications": "Notifications",
+    "notificationAccessDisabled": "Notification Access Disabled",
+    "tapToEnable": "Tap to enable reading phone notifications",
+    "phoneNotifications": "Phone Notifications",
+    "noNotifications": "No notifications yet",
+    "clearAll": "Clear All",
+    "preferences": "Preferences",
+    "darkMode": "Dark Mode",
+    "emailPush": "Email, Push",
+    "language": "Language",
+    "security": "Security",
+    "faceId": "App Lock",
+    "changePin": "Change PIN",
+    "support": "Support",
+    "helpCenter": "Help Center",
+    "privacyPolicy": "Privacy Policy",
+    "logOut": "Log Out",
+    "version": "Version"
+  }
+}
