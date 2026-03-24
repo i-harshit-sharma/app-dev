@@ -1,9 +1,11 @@
 import FinancialHealthCard from '@/components/home/FinancialHealthCard';
 import InsightCard from '@/components/home/InsightCard';
+import PendingTransactionCard from '@/components/home/PendingTransactionCard';
 import TransactionItem from '@/components/home/TransactionItem';
 // import SearchBar from '@/components/SearchBar'; // Removed SearchBar as per request
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useTransactions } from '@/context/TransactionContext';
 import { InsightFeedService } from '@/services/InsightFeedService';
@@ -14,7 +16,8 @@ import { DeviceEventEmitter, Modal, SafeAreaView, SectionList, StatusBar, StyleS
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const { transactions: expenses, refreshTransactions, financialPlan, getMonthlySummary, getOverallSummary, getFinancialHealth, getSafeToSpend, goals, addGoal, getGoalPlan } = useTransactions();
+  const { transactions: expenses, refreshTransactions, addTransaction, financialPlan, getMonthlySummary, getOverallSummary, getFinancialHealth, getSafeToSpend, goals, addGoal, getGoalPlan } = useTransactions();
+  const { pendingTransactions, confirmTransaction, dismissTransaction } = useNotifications();
   const { theme: currentTheme } = useTheme();
   const theme = Colors[currentTheme];
   const [currentDate, setCurrentDate] = useState(() => {
@@ -231,6 +234,32 @@ export default function HomeScreen() {
         renderSectionHeader={renderSectionHeader}
         ListHeaderComponent={(
           <View>
+            {/* Pending Transactions from Notifications */}
+            {pendingTransactions.map(pt => (
+              <PendingTransactionCard
+                key={pt.id}
+                transaction={pt}
+                onConfirm={async () => {
+                  await addTransaction({
+                    title: pt.title,
+                    subtitle: pt.category || 'Notification',
+                    amount: pt.amount,
+                    currency: 'INR',
+                    type: pt.type,
+                    category: pt.category || 'Others',
+                    paymentMethod: 'Other',
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    date: pt.date || new Date(),
+                    icon: pt.type === 'income' ? 'cash' : 'cart',
+                    color: pt.type === 'income' ? '#4CAF50' : '#f44336',
+                    note: pt.originalText,
+                  });
+                  confirmTransaction(pt.id);
+                }}
+                onIgnore={() => dismissTransaction(pt.id)}
+              />
+            ))}
+
             {/* Financial Health Card */}
             <FinancialHealthCard
               income={syncedTotalIncome}

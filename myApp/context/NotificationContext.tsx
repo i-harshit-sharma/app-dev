@@ -2,32 +2,41 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, AppStateStatus } from 'react-native';
 import NotificationService, { AppNotification } from '@/services/NotificationService';
+import { ParserService } from '@/services/ParserService';
 
 const STORAGE_KEY = '@finvault_notifications';
+const PENDING_STORAGE_KEY = '@finvault_pending_transactions';
 const MAX_STORED = 100; // cap to avoid excessive storage
 
 interface NotificationContextType {
     notifications: AppNotification[];
+    pendingTransactions: any[]; // We can refine the type if needed
     hasPermission: boolean;
     isLoading: boolean;
     refreshNotifications: () => Promise<void>;
     clearAll: () => void;
     clearOne: (id: string) => void;
+    confirmTransaction: (id: string) => void;
+    dismissTransaction: (id: string) => void;
     openPermissionSettings: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType>({
     notifications: [],
+    pendingTransactions: [],
     hasPermission: false,
     isLoading: false,
     refreshNotifications: async () => {},
     clearAll: () => {},
     clearOne: () => {},
+    confirmTransaction: () => {},
+    dismissTransaction: () => {},
     openPermissionSettings: async () => {},
 });
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
+    const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
     const [hasPermission, setHasPermission] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -38,13 +47,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         } catch { /* ignore */ }
     }, []);
 
-    // Load persisted notifications from storage
+    // Persist pending transactions to AsyncStorage
+    const persistPending = useCallback(async (pending: any[]) => {
+        try {
+            await AsyncStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(pending));
+        } catch { /* ignore */ }
+    }, []);
+
+    // Load persisted data from storage
     const loadPersisted = useCallback(async () => {
         try {
             const raw = await AsyncStorage.getItem(STORAGE_KEY);
             if (raw) {
                 const parsed: AppNotification[] = JSON.parse(raw);
                 setNotifications(parsed);
+            }
+            const rawPending = await AsyncStorage.getItem(PENDING_STORAGE_KEY);
+            if (rawPending) {
+                const parsedPending = JSON.parse(rawPending);
+                setPendingTransactions(parsedPending);
             }
         } catch { /* ignore */ }
     }, []);
@@ -62,7 +83,31 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             persist(merged);
             return merged;
         });
-    }, [persist]);
+
+        // Detect potential transactions
+        incoming.forEach(n => {
+            if (n.text) {
+                const parsed = ParserService.parseText(n.text);
+                if (parsed.amount && parsed.amount > 0) {
+                    setPendingTransactions(prev => {
+                        // Avoid duplicates if notification re-posted
+                        if (prev.some(p => p.id === n.id)) return prev;
+                        const newPending = [...prev, {
+                            id: n.id,
+                            amount: parsed.amount,
+                            title: parsed.merchant || n.appName,
+                            category: parsed.category,
+                            type: parsed.type,
+                            date: new Date(n.timestamp),
+                            originalText: n.text,
+                        }];
+                        persistPending(newPending);
+                        return newPending;
+                    });
+                }
+            }
+        });
+    }, [persist, persistPending]);
 
     // Full refresh: check permission, then fetch active notifications
     const refreshNotifications = useCallback(async () => {
@@ -128,6 +173,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         });
     }, [persist]);
 
+    const confirmTransaction = useCallback((id: string) => {
+        setPendingTransactions(prev => {
+            const updated = prev.filter(p => p.id !== id);
+            persistPending(updated);
+            return updated;
+        });
+    }, [persistPending]);
+
+    const dismissTransaction = useCallback((id: string) => {
+        setPendingTransactions(prev => {
+            const updated = prev.filter(p => p.id !== id);
+            persistPending(updated);
+            return updated;
+        });
+    }, [persistPending]);
+
     const openPermissionSettings = useCallback(async () => {
         await NotificationService.openSettings();
     }, []);
@@ -135,11 +196,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return (
         <NotificationContext.Provider value={{
             notifications,
+            pendingTransactions,
             hasPermission,
             isLoading,
             refreshNotifications,
             clearAll,
             clearOne,
+            confirmTransaction,
+            dismissTransaction,
             openPermissionSettings,
         }}>
             {children}
