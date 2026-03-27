@@ -33,28 +33,95 @@ function inferCategory(text: string): string {
 }
 
 function inferType(text: string): 'expense' | 'income' {
-  return /(received|credited|salary|income|earned|refund|deposited)/i.test(text) ? 'income' : 'expense';
+  const normalized = text.toLowerCase();
+
+  // Credit/income-first to correctly classify alerts like "Rs 1,00,000 Cr".
+  if (/(\bcredited\b|\bcredit\b|\bcr\b|\breceived\b|\bgot\b|\bdeposited\b|\bdeposit\b|\brefund\b|\bsalary\b|\bincome\b|\bearned\b)/i.test(normalized)) {
+    return 'income';
+  }
+
+  if (/(\bdebited\b|\bdebit\b|\bdr\b|\bpaid\b|\bspent\b|\bsent\b|\bwithdrawn\b|\bwdl\b|\bpurchase\b|\bpurchase\b)/i.test(normalized)) {
+    return 'expense';
+  }
+
+  return 'expense';
+}
+
+function parseAmount(raw: string): number | undefined {
+  const cleaned = raw.replace(/,/g, '').replace(/\/-$/g, '').trim();
+  const value = parseFloat(cleaned);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function contextAround(text: string, start: number, end: number): string {
+  const left = Math.max(0, start - 48);
+  const right = Math.min(text.length, end + 48);
+  return text.slice(left, right).toLowerCase();
+}
+
+function extractByIntentPatterns(text: string): number | undefined {
+  // Intent patterns prefer real transaction verbs and avoid free-form numeric fallback.
+  const patterns = [
+    /(?:debited|debit|dr\b|paid|spent|sent|withdrawn|wdl)\D{0,25}(?:inr|rs\.?|₹)?\s*\+?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i,
+    /(?:credited|credit|cr\b|received|got|deposited|deposit)\D{0,25}(?:inr|rs\.?|₹)?\s*\+?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i,
+    /(?:inr|rs\.?|₹)\s*\+?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(?:\/-)?\s*(?:debited|debit|dr\b|paid|spent|sent|withdrawn|wdl)/i,
+    /(?:inr|rs\.?|₹)\s*\+?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(?:\/-)?\s*(?:credited|credit|cr\b|received|got|deposited|deposit)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const value = parseAmount(match[1]);
+    if (value && value > 0) return value;
+  }
+
+  return undefined;
+}
+
+function extractCurrencyCandidates(text: string): number | undefined {
+  const regex = /(?:₹|inr|rs\.?|rupees?)\s*\+?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)(?:\s*\/-)?/gi;
+  const candidates: Array<{ amount: number; score: number }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    const amount = parseAmount(match[1]);
+    if (!amount || amount <= 0) continue;
+
+    const start = match.index;
+    const end = match.index + match[0].length;
+    const context = contextAround(text, start, end);
+
+    let score = 1;
+    if (/(debited|debit|dr\b|paid|spent|sent|withdrawn|wdl|purchase)/i.test(context)) score += 5;
+    if (/(credited|credit|cr\b|received|got|deposited|deposit|salary|refund)/i.test(context)) score += 5;
+
+    // Penalize balance-like captures strongly.
+    if (/(avl\s*bal|available\s*bal|avbl\s*bal|clr\s*bal|closing\s*bal|\bbal\b|balance)/i.test(context)) score -= 7;
+
+    // Penalize metadata contexts that are frequently not amounts.
+    if (/(ref|utr|txn\s*id|transaction\s*id|order#|acct|a\/c|ending|account\s*ending)/i.test(context)) score -= 3;
+
+    candidates.push({ amount, score });
+  }
+
+  if (candidates.length === 0) return undefined;
+  candidates.sort((a, b) => b.score - a.score || b.amount - a.amount);
+
+  return candidates[0].score > 0 ? candidates[0].amount : undefined;
 }
 
 function extractBestAmount(text: string): number | undefined {
-  const prioritizedPatterns = [
-    /(?:total|amount|paid|spent|received|credited)\s*(?:is|of|rs\.?|₹)?\s*([0-9]+(?:[.,][0-9]{1,2})?)/i,
-    /(?:₹|rs\.?)[\s]*([0-9]+(?:[.,][0-9]{1,2})?)/i,
-  ];
+  const byIntent = extractByIntentPatterns(text);
+  if (byIntent) return byIntent;
 
-  for (const pattern of prioritizedPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      return parseFloat(match[1].replace(/,/g, ''));
-    }
-  }
+  const byCurrency = extractCurrencyCandidates(text);
+  if (byCurrency) return byCurrency;
 
-  const allMatches = [...text.matchAll(/([0-9]+(?:[.,][0-9]{1,2})?)/g)]
-    .map(match => parseFloat(match[1].replace(/,/g, '')))
-    .filter(value => Number.isFinite(value));
+  // Conservative fallback: only accept amount near financial verbs.
+  const fallback = text.match(/(?:paid|spent|received|credited|debited|dr\b|cr\b|sent|withdrawn)\D{0,20}([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i);
+  if (!fallback) return undefined;
 
-  if (allMatches.length === 0) return undefined;
-  return Math.max(...allMatches);
+  return parseAmount(fallback[1]);
 }
 
 function extractVoiceAmount(text: string): number | undefined {
