@@ -3,7 +3,7 @@ package com.anonymous.FinVault
 import android.app.Notification
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
+import android.provider.Telephony
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -25,9 +25,34 @@ class FinVaultNotificationService : NotificationListenerService() {
         const val ACTION_NOTIFICATION_POSTED = "com.anonymous.FinVault.NOTIFICATION_POSTED"
         const val ACTION_NOTIFICATION_REMOVED = "com.anonymous.FinVault.NOTIFICATION_REMOVED"
         const val EXTRA_NOTIFICATION_DATA = "notification_data"
+
+        // Common SMS app package IDs used as fallback when default SMS app lookup is unavailable.
+        private val KNOWN_SMS_PACKAGES = setOf(
+            "com.google.android.apps.messaging",
+            "com.android.mms",
+            "com.samsung.android.messaging",
+            "com.microsoft.android.smsorganizer",
+            "com.miui.securitycenter",
+            "com.coloros.mms"
+        )
+    }
+
+    private fun isSmsPackage(packageName: String): Boolean {
+        val defaultSmsPackage = try {
+            Telephony.Sms.getDefaultSmsPackage(this)
+        } catch (_: Exception) {
+            null
+        }
+
+        if (!defaultSmsPackage.isNullOrBlank() && packageName == defaultSmsPackage) {
+            return true
+        }
+
+        return KNOWN_SMS_PACKAGES.contains(packageName)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (!isSmsPackage(sbn.packageName)) return
         val data = buildNotificationJson(sbn) ?: return
         val intent = Intent(ACTION_NOTIFICATION_POSTED).apply {
             putExtra(EXTRA_NOTIFICATION_DATA, data.toString())
@@ -36,6 +61,7 @@ class FinVaultNotificationService : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (!isSmsPackage(sbn.packageName)) return
         val intent = Intent(ACTION_NOTIFICATION_REMOVED).apply {
             putExtra(EXTRA_NOTIFICATION_DATA, sbn.key)
         }
@@ -44,6 +70,8 @@ class FinVaultNotificationService : NotificationListenerService() {
 
     private fun buildNotificationJson(sbn: StatusBarNotification): JSONObject? {
         return try {
+            if (!isSmsPackage(sbn.packageName)) return null
+
             val notification = sbn.notification ?: return null
             val extras = notification.extras ?: return null
 
