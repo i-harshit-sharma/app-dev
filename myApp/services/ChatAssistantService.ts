@@ -1,11 +1,12 @@
 ﻿import { FinancialPlan, FinancialSummary, LongTermGoal, TransactionGroup, TransactionItem } from '@/context/TransactionContext';
 
-const DEFAULT_GEMINI_MODELS = [
+const DEFAULT_GEMINI_MODELS = Array.from(new Set([
   process.env.EXPO_PUBLIC_GEMINI_MODEL,
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash-latest',
-].filter((value): value is string => Boolean(value && value.trim()));
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-1.5-flash',
+].filter((value): value is string => Boolean(value && value.trim()))));
 
 export interface ChatAssistantUser {
   name?: string;
@@ -673,10 +674,8 @@ export const ChatAssistantService = {
       return await callGeminiApi(normalized, financialContext, history);
     } catch (err) {
       console.error('[Gemini][Chat] Typed request failed:', err);
-      return {
-        text: 'I could not reach Gemini right now. Please try again in a moment.',
-        suggestions: this.getSuggestedPrompts(context),
-      };
+      // Keep typed chat functional even when Gemini is unavailable or rate-limited.
+      return localRespond(query, context);
     }
   },
 
