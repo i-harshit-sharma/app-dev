@@ -119,7 +119,7 @@ export const addTransaction = async (item: Omit<TransactionItem, 'id'> & { date:
             ...item,
             id,
             userId,
-            date: item.date.toISOString(),
+            date: item.date instanceof Date ? item.date.toISOString() : new Date(item.date).toISOString(),
              // Ensure defaults for optional fields
              location: item.location || 'Kolkata',
              latitude: item.latitude,
@@ -191,7 +191,7 @@ export const updateTransaction = async (
                 item.paymentMethod || 'Other',
                 item.note || '',
                 item.image || '',
-                item.date.toISOString(),
+                item.date instanceof Date ? item.date.toISOString() : new Date(item.date).toISOString(),
                 id,
                 userId,
             ]
