@@ -1,4 +1,4 @@
-import { addTransaction as addTxToDB, deleteTransaction as deleteTxFromDB, getTransactions as fetchTransactions, initDatabase, updateTransaction as updateTxInDB, exportAllTransactions, importAllTransactions } from '@/services/DatabaseService';
+import { addTransaction as addTxToDB, deleteTransaction as deleteTxFromDB, getTransactions as fetchTransactions, initDatabase, updateTransaction as updateTxInDB, exportAllTransactions, importAllTransactions, exportTransactionsAsCSV, importTransactionsFromCSV } from '@/services/DatabaseService';
 import { useAuth } from '@/context/AuthContext';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
@@ -106,6 +106,8 @@ interface TransactionContextType {
     refreshTransactions: () => Promise<void>;
     exportData: () => Promise<string | null>;
     importData: (jsonStr: string) => Promise<boolean>;
+    exportDataAsCSV: () => Promise<string | null>;
+    importDataFromCSV: (csvStr: string) => Promise<{ imported: number; skipped: number } | null>;
 }
 
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
@@ -524,6 +526,29 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         }
     }, [user?.id, financialPlan, goals, netWorth]);
 
+    const exportDataAsCSV = useCallback(async () => {
+        if (!user?.id) return null;
+        try {
+            const csv = await exportTransactionsAsCSV(user.id);
+            return csv || null;
+        } catch (error) {
+            console.error('Failed to export data as CSV', error);
+            return null;
+        }
+    }, [user?.id]);
+
+    const importDataFromCSV = useCallback(async (csvStr: string) => {
+        if (!user?.id) return null;
+        try {
+            const result = await importTransactionsFromCSV(csvStr, user.id);
+            await refreshTransactions();
+            return result;
+        } catch (error) {
+            console.error('Failed to import data from CSV', error);
+            return null;
+        }
+    }, [user?.id, refreshTransactions]);
+
     const importData = useCallback(async (jsonStr: string) => {
         if (!user?.id) return false;
         try {
@@ -573,6 +598,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
                 refreshTransactions,
                 exportData,
                 importData,
+                exportDataAsCSV,
+                importDataFromCSV,
             }}
         >
             {children}

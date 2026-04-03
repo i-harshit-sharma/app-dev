@@ -20,7 +20,7 @@ import {
     Animated,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -78,7 +78,7 @@ export default function ProfileScreen() {
     const theme = Colors[currentTheme as keyof typeof Colors];
     const isDark = currentTheme === 'dark';
     const { user, logout, updateProfile } = useAuth();
-    const { financialPlan, updateFinancialPlan, getWeeklyBudgetAllocation, getFinancialHealth, exportData, importData } = useTransactions();
+    const { financialPlan, updateFinancialPlan, getWeeklyBudgetAllocation, getFinancialHealth, exportData, importData, exportDataAsCSV, importDataFromCSV } = useTransactions();
     const { locale, setLanguage } = useLanguage();
     const { notifications, hasPermission, openPermissionSettings, clearOne, clearAll } = useNotifications();
     const router = useRouter();
@@ -103,6 +103,10 @@ export default function ProfileScreen() {
     const [helpVisible, setHelpVisible] = useState(false);
     const [privacyVisible, setPrivacyVisible] = useState(false);
     const [notificationsVisible, setNotificationsVisible] = useState(false);
+
+    // ── Data Management format pickers ────────────────────────────
+    const [exportFormatVisible, setExportFormatVisible] = useState(false);
+    const [importFormatVisible, setImportFormatVisible] = useState(false);
 
     // ── Financial Plan ────────────────────────────────────────────
     const [financialPlanVisible, setFinancialPlanVisible] = useState(false);
@@ -349,47 +353,62 @@ export default function ProfileScreen() {
         }
     };
 
-    const handleExport = async () => {
+    const handleExportWithFormat = async (format: 'json' | 'csv') => {
+        setExportFormatVisible(false);
         try {
-            const dataStr = await exportData();
-            if (!dataStr) {
-                displayToast('No data to export or error occurred.', 'error');
-                return;
-            }
-            const fileUri = (FileSystem as any).documentDirectory + `finvault_export_${Date.now()}.json`;
-            await FileSystem.writeAsStringAsync(fileUri, dataStr, { encoding: (FileSystem as any).EncodingType.UTF8 });
-            if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(fileUri);
+            if (format === 'json') {
+                const dataStr = await exportData();
+                if (!dataStr) { displayToast('No data to export.', 'error'); return; }
+                const fileUri = FileSystem.documentDirectory + `finvault_backup_${Date.now()}.json`;
+                await FileSystem.writeAsStringAsync(fileUri, dataStr, { encoding: FileSystem.EncodingType.UTF8 });
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(fileUri, { mimeType: 'application/json', dialogTitle: 'Export Backup (JSON)' });
+                } else {
+                    displayToast('Sharing is not available on this device.', 'error');
+                }
             } else {
-                displayToast('Sharing is not available on this device', 'error');
+                const csvStr = await exportDataAsCSV();
+                if (!csvStr) { displayToast('No transactions to export.', 'error'); return; }
+                const fileUri = FileSystem.documentDirectory + `finvault_transactions_${Date.now()}.csv`;
+                await FileSystem.writeAsStringAsync(fileUri, csvStr, { encoding: FileSystem.EncodingType.UTF8 });
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export Transactions (CSV)' });
+                } else {
+                    displayToast('Sharing is not available on this device.', 'error');
+                }
             }
-        } catch (error) {
+        } catch {
             displayToast('Export failed.', 'error');
         }
     };
 
-    const handleImport = async () => {
+    const handleImportWithFormat = async (format: 'json' | 'csv') => {
+        setImportFormatVisible(false);
         try {
             const result = await DocumentPicker.getDocumentAsync({
-                type: ['application/json', '*/*'],
+                type: format === 'json' ? ['application/json', '*/*'] : ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'],
                 copyToCacheDirectory: true,
             });
-
-            if (result.canceled || !result.assets || result.assets.length === 0) {
-                return;
-            }
+            if (result.canceled || !result.assets || result.assets.length === 0) return;
 
             const fileUri = result.assets[0].uri;
-            const dataStr = await FileSystem.readAsStringAsync(fileUri, { encoding: (FileSystem as any).EncodingType.UTF8 });
-            
-            const success = await importData(dataStr);
-            if (success) {
-                displayToast('Data imported successfully!', 'success');
+            const fileContent = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
+
+            if (format === 'json') {
+                const success = await importData(fileContent);
+                displayToast(success ? 'Data imported successfully!' : 'Failed to import data.', success ? 'success' : 'error');
             } else {
-                displayToast('Failed to import data.', 'error');
+                const stats = await importDataFromCSV(fileContent);
+                if (!stats) {
+                    displayToast('CSV import failed. Check the file format.', 'error');
+                } else if (stats.imported === 0 && stats.skipped > 0) {
+                    displayToast(`No rows imported — ${stats.skipped} row(s) were invalid.`, 'error');
+                } else {
+                    displayToast(`Imported ${stats.imported} transaction(s)${stats.skipped > 0 ? `, ${stats.skipped} skipped` : ''}.`, 'success');
+                }
             }
-        } catch (error) {
-            displayToast('Import failed. Invalid file format.', 'error');
+        } catch {
+            displayToast('Import failed. Invalid or unsupported file.', 'error');
         }
     };
 
@@ -648,17 +667,17 @@ export default function ProfileScreen() {
                         <SettingItem
                             icon="cloud-download-outline"
                             title="Export Data"
-                            subtitle="Save your data to a file"
+                            subtitle="Choose JSON or CSV format"
                             color={theme.tint}
-                            onPress={handleExport}
+                            onPress={() => setExportFormatVisible(true)}
                         />
                         <View style={[styles.separator, { backgroundColor: theme.border }]} />
                         <SettingItem
                             icon="cloud-upload-outline"
                             title="Import Data"
-                            subtitle="Restore data from a file"
+                            subtitle="Choose JSON or CSV format"
                             color={theme.warning}
-                            onPress={handleImport}
+                            onPress={() => setImportFormatVisible(true)}
                         />
                     </Section>
 
@@ -1214,6 +1233,122 @@ export default function ProfileScreen() {
                 </KeyboardAvoidingView>
             </Modal>
 
+            {/* ── Export Format Picker ─────────────────────────────────── */}
+            <Modal
+                visible={exportFormatVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setExportFormatVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setExportFormatVisible(false)}
+                >
+                    <View style={[styles.fmtSheetContainer, { backgroundColor: theme.card }]}>
+                        <View style={[styles.fmtSheetHandle, { backgroundColor: theme.border }]} />
+                        <Text style={[styles.fmtSheetTitle, { color: theme.text }]}>Export Data</Text>
+                        <Text style={[styles.fmtSheetSubtitle, { color: theme.icon }]}>Choose a format to export your data</Text>
+
+                        <TouchableOpacity
+                            style={[styles.fmtOption, { borderColor: theme.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9FAFB' }]}
+                            onPress={() => handleExportWithFormat('json')}
+                            activeOpacity={0.75}
+                        >
+                            <View style={[styles.fmtOptionIcon, { backgroundColor: theme.tint + '20' }]}>
+                                <Ionicons name="code-slash-outline" size={24} color={theme.tint} />
+                            </View>
+                            <View style={styles.fmtOptionText}>
+                                <Text style={[styles.fmtOptionTitle, { color: theme.text }]}>JSON — Full Backup</Text>
+                                <Text style={[styles.fmtOptionDesc, { color: theme.icon }]}>Includes transactions, financial plan & goals</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color={theme.icon} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.fmtOption, { borderColor: theme.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9FAFB' }]}
+                            onPress={() => handleExportWithFormat('csv')}
+                            activeOpacity={0.75}
+                        >
+                            <View style={[styles.fmtOptionIcon, { backgroundColor: theme.emerald + '20' }]}>
+                                <Ionicons name="grid-outline" size={24} color={theme.emerald} />
+                            </View>
+                            <View style={styles.fmtOptionText}>
+                                <Text style={[styles.fmtOptionTitle, { color: theme.text }]}>CSV — Transactions Only</Text>
+                                <Text style={[styles.fmtOptionDesc, { color: theme.icon }]}>Open in Excel, Google Sheets, etc.</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color={theme.icon} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.fmtCancelBtn, { borderColor: theme.border }]}
+                            onPress={() => setExportFormatVisible(false)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.fmtCancelText, { color: theme.icon }]}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* ── Import Format Picker ─────────────────────────────────── */}
+            <Modal
+                visible={importFormatVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setImportFormatVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setImportFormatVisible(false)}
+                >
+                    <View style={[styles.fmtSheetContainer, { backgroundColor: theme.card }]}>
+                        <View style={[styles.fmtSheetHandle, { backgroundColor: theme.border }]} />
+                        <Text style={[styles.fmtSheetTitle, { color: theme.text }]}>Import Data</Text>
+                        <Text style={[styles.fmtSheetSubtitle, { color: theme.icon }]}>Choose the format of the file you're importing</Text>
+
+                        <TouchableOpacity
+                            style={[styles.fmtOption, { borderColor: theme.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9FAFB' }]}
+                            onPress={() => handleImportWithFormat('json')}
+                            activeOpacity={0.75}
+                        >
+                            <View style={[styles.fmtOptionIcon, { backgroundColor: theme.warning + '20' }]}>
+                                <Ionicons name="code-slash-outline" size={24} color={theme.warning} />
+                            </View>
+                            <View style={styles.fmtOptionText}>
+                                <Text style={[styles.fmtOptionTitle, { color: theme.text }]}>JSON — Full Backup</Text>
+                                <Text style={[styles.fmtOptionDesc, { color: theme.icon }]}>Restores transactions, plan & goals</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color={theme.icon} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.fmtOption, { borderColor: theme.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9FAFB' }]}
+                            onPress={() => handleImportWithFormat('csv')}
+                            activeOpacity={0.75}
+                        >
+                            <View style={[styles.fmtOptionIcon, { backgroundColor: '#8B5CF620' }]}>
+                                <Ionicons name="grid-outline" size={24} color="#8B5CF6" />
+                            </View>
+                            <View style={styles.fmtOptionText}>
+                                <Text style={[styles.fmtOptionTitle, { color: theme.text }]}>CSV — Transactions Only</Text>
+                                <Text style={[styles.fmtOptionDesc, { color: theme.icon }]}>Load from a spreadsheet export</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color={theme.icon} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.fmtCancelBtn, { borderColor: theme.border }]}
+                            onPress={() => setImportFormatVisible(false)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.fmtCancelText, { color: theme.icon }]}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
             {showToast && (
                 <Animated.View style={[
                     styles.toastContainer, 
@@ -1736,6 +1871,72 @@ const styles = StyleSheet.create({
     },
     viewMoreText: {
         fontSize: 13,
+        fontWeight: '600',
+    },
+    // ── Format picker bottom sheet ────────────────────────────────
+    fmtSheetContainer: {
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingHorizontal: 20,
+        paddingBottom: 32,
+        paddingTop: 12,
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+    },
+    fmtSheetHandle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginBottom: 20,
+    },
+    fmtSheetTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    fmtSheetSubtitle: {
+        fontSize: 13,
+        marginBottom: 20,
+    },
+    fmtOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 14,
+        marginBottom: 10,
+        gap: 12,
+    },
+    fmtOptionIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    fmtOptionText: {
+        flex: 1,
+    },
+    fmtOptionTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    fmtOptionDesc: {
+        fontSize: 12,
+    },
+    fmtCancelBtn: {
+        marginTop: 4,
+        borderRadius: 14,
+        borderWidth: 1,
+        paddingVertical: 14,
+        alignItems: 'center',
+    },
+    fmtCancelText: {
+        fontSize: 15,
         fontWeight: '600',
     },
 });

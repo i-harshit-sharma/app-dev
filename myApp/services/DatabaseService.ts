@@ -284,3 +284,164 @@ export const importAllTransactions = async (transactions: DBTransaction[], userI
         throw error;
     }
 };
+
+// ─── CSV helpers ──────────────────────────────────────────────────────────────
+
+const CSV_COLUMNS: (keyof DBTransaction)[] = [
+    'id', 'userId', 'title', 'subtitle', 'amount', 'currency', 'type',
+    'icon', 'color', 'location', 'latitude', 'longitude', 'time',
+    'category', 'paymentMethod', 'note', 'image', 'date',
+];
+
+/** Escape a single CSV cell value per RFC 4180 */
+const escapeCell = (value: unknown): string => {
+    const str = value === null || value === undefined ? '' : String(value);
+    // Wrap in quotes if the value contains a comma, double-quote, or newline
+    if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+};
+
+/** Parse a single CSV line into an array of cell strings, handling quoted fields */
+const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    let i = 0;
+    while (i < line.length) {
+        const ch = line[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                if (i + 1 < line.length && line[i + 1] === '"') {
+                    current += '"';
+                    i += 2;
+                } else {
+                    inQuotes = false;
+                    i++;
+                }
+            } else {
+                current += ch;
+                i++;
+            }
+        } else {
+            if (ch === '"') {
+                inQuotes = true;
+                i++;
+            } else if (ch === ',') {
+                result.push(current);
+                current = '';
+                i++;
+            } else {
+                current += ch;
+                i++;
+            }
+        }
+    }
+    result.push(current);
+    return result;
+};
+
+/**
+ * Export all transactions for a user as a CSV string.
+ * The first row contains column headers.
+ */
+export const exportTransactionsAsCSV = async (userId: string): Promise<string> => {
+    try {
+        if (!userId) return '';
+        const db = await getDB();
+        const rows = await db.getAllAsync<DBTransaction>(
+            `SELECT * FROM ${TABLE_NAME} WHERE userId = ?`,
+            [userId]
+        );
+
+        const header = CSV_COLUMNS.join(',');
+        const dataRows = rows.map(row =>
+            CSV_COLUMNS.map(col => escapeCell((row as any)[col])).join(',')
+        );
+
+        return [header, ...dataRows].join('\n');
+    } catch (error) {
+        console.error('Error exporting transactions as CSV:', error);
+        return '';
+    }
+};
+
+/**
+ * Import transactions from a CSV string.
+ * Expects the first row to be the header row matching CSV_COLUMNS.
+ * Rows that cannot be parsed are silently skipped.
+ */
+export const importTransactionsFromCSV = async (
+    csvStr: string,
+    userId: string
+): Promise<{ imported: number; skipped: number }> => {
+    let imported = 0;
+    let skipped = 0;
+    try {
+        const db = await getDB();
+        // Normalise line endings
+        const lines = csvStr.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        if (lines.length < 2) return { imported, skipped };
+
+        const headerLine = lines[0];
+        const headerCols = parseCsvLine(headerLine);
+
+        // Validate header
+        const missingCols = CSV_COLUMNS.filter(c => !headerCols.includes(c));
+        if (missingCols.length > 0) {
+            console.warn('CSV import: missing columns:', missingCols);
+            // Allow partial imports — we'll map what we can
+        }
+
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            try {
+                const cells = parseCsvLine(line);
+                const record: Record<string, unknown> = {};
+                headerCols.forEach((col, idx) => {
+                    record[col] = cells[idx] ?? '';
+                });
+
+                const item: DBTransaction = {
+                    id: String(record.id || ''),
+                    userId,  // always override with current user
+                    title: String(record.title || ''),
+                    subtitle: String(record.subtitle || ''),
+                    amount: parseFloat(String(record.amount)) || 0,
+                    currency: String(record.currency || 'INR'),
+                    type: String(record.type || 'expense'),
+                    icon: String(record.icon || ''),
+                    color: String(record.color || ''),
+                    location: String(record.location || ''),
+                    latitude: record.latitude ? parseFloat(String(record.latitude)) : undefined,
+                    longitude: record.longitude ? parseFloat(String(record.longitude)) : undefined,
+                    time: String(record.time || ''),
+                    category: String(record.category || 'General'),
+                    paymentMethod: String(record.paymentMethod || 'Other'),
+                    note: String(record.note || ''),
+                    image: String(record.image || ''),
+                    date: String(record.date || new Date().toISOString()),
+                };
+
+                if (!item.id || !item.title || !item.date) {
+                    skipped++;
+                    continue;
+                }
+
+                await addTransactionToDB(db, item);
+                imported++;
+            } catch (rowErr) {
+                console.warn(`CSV import: skipping row ${i}:`, rowErr);
+                skipped++;
+            }
+        }
+
+        return { imported, skipped };
+    } catch (error) {
+        console.error('Error importing transactions from CSV:', error);
+        return { imported, skipped };
+    }
+};
