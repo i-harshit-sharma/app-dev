@@ -181,7 +181,7 @@ export default function BudgetScreen() {
                             {/* Track */}
                             <Circle
                                 cx={GAUGE_CX} cy={GAUGE_CY} r={GAUGE_R}
-                                stroke={isDark ? '#2A2A2A' : '#F0F0F0'}
+                                stroke={theme.border}
                                 strokeWidth={10}
                                 strokeDasharray={`${ARC_LENGTH} ${2 * Math.PI * GAUGE_R}`}
                                 strokeLinecap="round"
@@ -343,7 +343,7 @@ export default function BudgetScreen() {
                                                 <Text style={[styles.catLimit, { color: theme.icon }]}> / ₹{cat.limit.toLocaleString('en-IN')}</Text>
                                             </View>
                                         </View>
-                                        <View style={[styles.barBg, { backgroundColor: isDark ? '#2A2A2A' : '#F0F0F2' }]}>
+                                        <View style={[styles.barBg, { backgroundColor: theme.border }]}>
                                             <View style={[styles.barFill, { width: `${cat.progress * 100}%`, backgroundColor: barColor }]} />
                                         </View>
                                         {cat.suggestion && (

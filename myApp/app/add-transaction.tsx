@@ -251,11 +251,11 @@ export default function AddTransactionScreen() {
                 activeOpacity={1}
                 onPress={onClose}
             >
-                <View style={styles.modalContent}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>{title}</Text>
+                <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+                    <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+                        <Text style={[styles.modalTitle, { color: theme.text }]}>{title}</Text>
                         <TouchableOpacity onPress={onClose}>
-                            <Ionicons name="close" size={24} color="#666" />
+                            <Ionicons name="close" size={24} color={theme.icon} />
                         </TouchableOpacity>
                     </View>
                     <FlatList
@@ -263,13 +263,13 @@ export default function AddTransactionScreen() {
                         keyExtractor={(item) => item}
                         renderItem={({ item }) => (
                             <TouchableOpacity
-                                style={styles.modalItem}
+                                style={[styles.modalItem, { borderBottomColor: theme.border }]}
                                 onPress={() => {
                                     onSelect(item);
                                     onClose();
                                 }}
                             >
-                                <Text style={styles.modalItemText}>{item}</Text>
+                                <Text style={[styles.modalItemText, { color: theme.text }]}>{item}</Text>
                             </TouchableOpacity>
                         )}
                     />
@@ -280,7 +280,7 @@ export default function AddTransactionScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.card }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
                     <Ionicons name="close" size={28} color={theme.tint} />
                 </TouchableOpacity>
@@ -297,88 +297,88 @@ export default function AddTransactionScreen() {
                 <ScrollView contentContainerStyle={styles.content}>
 
                     {/* Type Segmented Control */}
-                    <View style={styles.segmentContainer}>
+                    <View style={[styles.segmentContainer, { backgroundColor: theme.border + '60' }]}>
                         <TouchableOpacity
                             style={[
                                 styles.segmentButton,
                                 type === 'expense' && styles.segmentButtonActive,
-                                type === 'expense' && { backgroundColor: '#FFF0EE' }
+                                type === 'expense' && { backgroundColor: theme.expense + '18' }
                             ]}
                             onPress={() => setType('expense')}
                         >
                             <Text style={[
-                                styles.segmentText,
-                                type === 'expense' && { color: '#D32F2F', fontWeight: 'bold' }
+                                styles.segmentText, { color: theme.icon },
+                                type === 'expense' && { color: theme.expense, fontWeight: 'bold' }
                             ]}>Expense</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[
                                 styles.segmentButton,
                                 type === 'income' && styles.segmentButtonActive,
-                                type === 'income' && { backgroundColor: '#EAF2FF' }
+                                type === 'income' && { backgroundColor: theme.tint + '20' }
                             ]}
                             onPress={() => setType('income')}
                         >
                             <Text style={[
-                                styles.segmentText,
+                                styles.segmentText, { color: theme.icon },
                                 type === 'income' && { color: theme.tint, fontWeight: 'bold' }
                             ]}>Income</Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* Amount Input */}
-                    <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Amount</Text>
+                    <View style={[styles.inputContainer]}>
+                        <Text style={[styles.label, { color: theme.icon }]}>Amount</Text>
                         <View style={styles.amountInputWrapper}>
-                            <Text style={styles.currencySymbol}>₹</Text>
+                            <Text style={[styles.currencySymbol, { color: theme.text }]}>₹</Text>
                             <TextInput
-                                style={styles.amountInput}
+                                style={[styles.amountInput, { color: theme.text }]}
                                 value={amount}
                                 onChangeText={setAmount}
                                 placeholder="0.00"
                                 keyboardType="numeric"
-                                placeholderTextColor="#ccc"
+                                placeholderTextColor={theme.icon}
                                 autoFocus
                             />
                         </View>
                     </View>
 
                     {/* Details Form */}
-                    <View style={styles.formSection}>
+                    <View style={[styles.formSection, { backgroundColor: theme.card }]}>
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Title</Text>
+                            <Text style={[styles.label, { color: theme.icon }]}>Title</Text>
                             <TextInput
-                                style={styles.textInput}
+                                style={[styles.textInput, { color: theme.text, borderBottomColor: theme.border }]}
                                 value={title}
                                 onChangeText={setTitle}
                                 placeholder="e.g. Lunch, Salary"
-                                placeholderTextColor="#999"
+                                placeholderTextColor={theme.icon}
                             />
                         </View>
 
                         <View style={styles.row}>
                             <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                                <Text style={styles.label}>Category</Text>
+                                <Text style={[styles.label, { color: theme.icon }]}>Category</Text>
                                 <TouchableOpacity
                                     onPress={() => setShowCategoryPicker(true)}
-                                    style={styles.dropdownButton}
+                                    style={[styles.dropdownButton, { borderBottomColor: theme.border }]}
                                 >
-                                    <Text style={[styles.dropdownText, !category && { color: '#999' }]}>
+                                    <Text style={[styles.dropdownText, { color: !category ? theme.icon : theme.text }]}>
                                         {category || 'Select'}
                                     </Text>
-                                    <Ionicons name="chevron-down" size={20} color="#666" />
+                                    <Ionicons name="chevron-down" size={20} color={theme.icon} />
                                 </TouchableOpacity>
                             </View>
                             <View style={[styles.inputGroup, { flex: 1, marginLeft: 10 }]}>
-                                <Text style={styles.label}>Method</Text>
+                                <Text style={[styles.label, { color: theme.icon }]}>Method</Text>
                                 <TouchableOpacity
                                     onPress={() => setShowMethodPicker(true)}
-                                    style={styles.dropdownButton}
+                                    style={[styles.dropdownButton, { borderBottomColor: theme.border }]}
                                 >
-                                    <Text style={[styles.dropdownText, !subtitle && { color: '#999' }]}>
+                                    <Text style={[styles.dropdownText, { color: !subtitle ? theme.icon : theme.text }]}>
                                         {subtitle || 'Select'}
                                     </Text>
-                                    <Ionicons name="chevron-down" size={20} color="#666" />
+                                    <Ionicons name="chevron-down" size={20} color={theme.icon} />
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -386,13 +386,13 @@ export default function AddTransactionScreen() {
                         <View style={styles.row}>
                             <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                                 <Text style={styles.label}>Location</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: theme.border }}>
                                     <TextInput
-                                        style={{ flex: 1, paddingVertical: 8, fontSize: 16, color: '#1a1a1a' }}
+                                        style={{ flex: 1, paddingVertical: 8, fontSize: 16, color: theme.text }}
                                         value={location}
                                         onChangeText={setLocation}
                                         placeholder="e.g. Kolkata"
-                                        placeholderTextColor="#999"
+                                        placeholderTextColor={theme.icon}
                                     />
                                     <TouchableOpacity onPress={handleGetLocation} style={{ padding: 4 }}>
                                         {isLoadingLocation ? (
@@ -405,10 +405,10 @@ export default function AddTransactionScreen() {
                             </View>
                             <View style={[styles.inputGroup, { flex: 1, marginLeft: 10 }]}>
                                 <Text style={styles.label}>Time</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: theme.border }}>
                                     <TouchableOpacity onPress={() => setShowPicker(!showPicker)} style={{ flex: 1 }}>
                                         <View style={{ paddingVertical: 8 }}>
-                                            <Text style={{ fontSize: 16, color: '#1a1a1a' }}>{time}</Text>
+                                            <Text style={{ fontSize: 16, color: theme.text }}>{time}</Text>
                                         </View>
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={handleSetCurrentTime} style={{ padding: 4 }}>
@@ -429,13 +429,13 @@ export default function AddTransactionScreen() {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Note</Text>
+                            <Text style={[styles.label, { color: theme.icon }]}>Note</Text>
                             <TextInput
-                                style={styles.textInput}
+                                style={[styles.textInput, { color: theme.text, borderBottomColor: theme.border }]}
                                 value={note}
                                 onChangeText={setNote}
                                 placeholder="Optional note"
-                                placeholderTextColor="#999"
+                                placeholderTextColor={theme.icon}
                                 multiline
                             />
                         </View>
@@ -477,7 +477,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingTop: Platform.OS === 'android' ? 40 : 10,
         paddingBottom: 20,
-        backgroundColor: '#FFFFFF',
         zIndex: 10,
     },
     closeButton: {
@@ -503,7 +502,6 @@ const styles = StyleSheet.create({
     },
     segmentContainer: {
         flexDirection: 'row',
-        backgroundColor: '#f5f5f5',
         borderRadius: 12,
         padding: 4,
         marginBottom: 24,
@@ -515,7 +513,6 @@ const styles = StyleSheet.create({
         borderRadius: 10,
     },
     segmentButtonActive: {
-        backgroundColor: 'white',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
@@ -525,7 +522,6 @@ const styles = StyleSheet.create({
     segmentText: {
         fontSize: 14,
         fontWeight: '500',
-        color: '#666',
     },
     inputContainer: {
         marginBottom: 30,
@@ -538,17 +534,14 @@ const styles = StyleSheet.create({
     currencySymbol: {
         fontSize: 40,
         fontWeight: '700',
-        color: '#1a1a1a',
         marginRight: 4,
     },
     amountInput: {
         fontSize: 40,
         fontWeight: '700',
-        color: '#1a1a1a',
         minWidth: 100,
     },
     formSection: {
-        backgroundColor: 'white',
         borderRadius: 20,
         padding: 20,
         shadowColor: '#000',
@@ -565,29 +558,24 @@ const styles = StyleSheet.create({
     },
     label: {
         fontSize: 12,
-        color: '#666',
         fontWeight: '600',
         marginBottom: 8,
         textTransform: 'uppercase',
     },
     textInput: {
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
         paddingVertical: 8,
         fontSize: 16,
-        color: '#1a1a1a',
     },
     dropdownButton: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
         paddingVertical: 8,
     },
     dropdownText: {
         fontSize: 16,
-        color: '#1a1a1a',
     },
     modalOverlay: {
         flex: 1,
@@ -595,7 +583,6 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: 'white',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         maxHeight: '50%',
@@ -607,22 +594,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
     },
     modalTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#1a1a1a',
     },
     modalItem: {
         paddingVertical: 15,
         paddingHorizontal: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#f9f9f9',
     },
     modalItemText: {
         fontSize: 16,
-        color: '#333',
     },
     mapContainer: {
         marginTop: 20,

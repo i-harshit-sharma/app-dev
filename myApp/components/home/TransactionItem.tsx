@@ -77,7 +77,7 @@ export default function TransactionItem({ item, onAskAI }: TransactionItemProps)
                 </Text>
 
                 {/* Micro-Button for Ask AI */}
-                <TouchableOpacity style={styles.askAiButton} onPress={onAskAI}>
+                <TouchableOpacity style={[styles.askAiButton, { backgroundColor: theme.electricBlue + '15' }]} onPress={onAskAI}>
                     <Text style={[styles.askAiText, { color: theme.electricBlue }]}>Ask AI</Text>
                 </TouchableOpacity>
             </View>
@@ -91,7 +91,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         paddingHorizontal: 20,
-        backgroundColor: 'white', // fallback
     },
     logoContainer: {
         width: 48,
@@ -126,7 +125,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     askAiButton: {
-        backgroundColor: '#EFF6FF',
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 8,

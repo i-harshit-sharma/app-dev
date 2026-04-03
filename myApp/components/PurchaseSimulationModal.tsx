@@ -109,7 +109,6 @@ export function PurchaseSimulationModal({ visible, onClose }: PurchaseSimulation
     const handleAddPurchase = async () => {
         const numAmount = parseFloat(amount);
         if (!numAmount || !selectedDbCategory) return;
-
         setIsAdding(true);
         try {
             await addTransaction({
@@ -177,7 +176,7 @@ export function PurchaseSimulationModal({ visible, onClose }: PurchaseSimulation
                                 <Text style={[styles.currencySymbol, { color: theme.tint }]}>₹</Text>
                                 <TextInput
                                     style={[styles.amountInput, { color: theme.text }]}
-                                    placeholder="0"
+                                    placeholder=""
                                     placeholderTextColor={theme.icon} // Lighter color for placeholder
                                     keyboardType="numeric"
                                     value={amount}
@@ -381,7 +380,7 @@ const styles = StyleSheet.create({
     amountInput: {
         fontSize: 64,
         fontWeight: '200',
-        minWidth: 100,
+        minWidth: 10,
         textAlign: 'center',
         padding: 0, // Remove default padding
     },

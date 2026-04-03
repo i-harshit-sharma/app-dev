@@ -427,7 +427,7 @@ export default function FinancialHealthCard({ income, expense, incomeTrend, expe
                         <Text style={[styles.statValue, { color: theme.text }]}>{formatCurrency(income)}</Text>
                     </View>
 
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
                     {/* Expense Breakdown Legend */}
                     {expenseSegments.slice(0, 4).map((segment, index) => (
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     },
     divider: {
         height: 1,
-        backgroundColor: '#E5E7EB',
+        backgroundColor: undefined, // set dynamically via JSX
         marginVertical: 4,
         opacity: 0.5,
     },

@@ -12,8 +12,9 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    useSystemColorScheme(); // intentionally ignored to keep app defaulting to light
-    const [theme, setThemeState] = useState<Theme>('light');
+    const systemColorScheme = useSystemColorScheme();
+    // Default to the device's system theme; fall back to 'light' if unavailable
+    const [theme, setThemeState] = useState<Theme>(systemColorScheme === 'dark' ? 'dark' : 'light');
 
     const toggleTheme = () => {
         setThemeState((prev) => {

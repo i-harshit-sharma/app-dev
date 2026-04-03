@@ -77,24 +77,24 @@ export default function FloatingActions() {
                 {isOpen && (
                     <Animated.View style={[styles.menuContainer, animatedMenuStyle]}>
                         <TouchableOpacity style={styles.actionButton} onPress={() => handleAction('scan')}>
-                            <View style={[styles.actionIcon, { backgroundColor: '#E3F2FD' }]}>
+                            <View style={[styles.actionIcon, { backgroundColor: theme.tint + '20' }]}>
                                 <Ionicons name="scan" size={20} color={theme.tint} />
                             </View>
-                            <Text style={[styles.actionLabel, { color: theme.text }]}>Scan Receipt</Text>
+                            <Text style={[styles.actionLabel, { color: theme.text, backgroundColor: theme.card }]}>Scan Receipt</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.actionButton} onPress={() => handleAction('voice')}>
-                            <View style={[styles.actionIcon, { backgroundColor: '#EAF2FF' }]}>
+                            <View style={[styles.actionIcon, { backgroundColor: theme.tint + '18' }]}>
                                 <Ionicons name="mic" size={20} color={theme.tint} />
                             </View>
-                            <Text style={[styles.actionLabel, { color: theme.text }]}>Voice Command</Text>
+                            <Text style={[styles.actionLabel, { color: theme.text, backgroundColor: theme.card }]}>Voice Command</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.actionButton} onPress={() => handleAction('manual')}>
-                            <View style={[styles.actionIcon, { backgroundColor: '#FCE4EC' }]}>
+                            <View style={[styles.actionIcon, { backgroundColor: theme.expense + '20' }]}>
                                 <Ionicons name="create" size={20} color={theme.expense} />
                             </View>
-                            <Text style={[styles.actionLabel, { color: theme.text }]}>Manual Entry</Text>
+                            <Text style={[styles.actionLabel, { color: theme.text, backgroundColor: theme.card }]}>Manual Entry</Text>
                         </TouchableOpacity>
                     </Animated.View>
                 )}
@@ -142,7 +142,6 @@ const styles = StyleSheet.create({
     actionLabel: {
         fontSize: 14,
         fontWeight: '600',
-        backgroundColor: 'white',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 8,

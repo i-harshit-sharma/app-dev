@@ -299,7 +299,7 @@ export default function ChatScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: currentTheme === 'dark' ? theme.background : '#F6FAFD' }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <Stack.Screen options={{ headerShown: false }} />
             <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} />
 
@@ -318,7 +318,7 @@ export default function ChatScreen() {
                                 <Text style={[styles.heroSubtitle, { color: theme.icon }]}>Ask questions about spending, budget pacing, savings, goals, and recent transactions.</Text>
                             </View>
                             <View style={[styles.heroBadge, { backgroundColor: currentTheme === 'dark' ? '#243042' : '#FFFFFF' }]}>
-                                <Text style={styles.heroBadgeLabel}>Profile</Text>
+                                <Text style={[styles.heroBadgeLabel, { color: theme.icon }]}>Profile</Text>
                                 <Text style={[styles.heroBadgeValue, { color: theme.text }]}>{user?.name?.split(' ')[0] || 'Guest'}</Text>
                             </View>
                         </View>
@@ -480,7 +480,6 @@ const styles = StyleSheet.create({
     heroBadgeLabel: {
         fontSize: 10,
         fontWeight: '700',
-        color: '#667085',
         textTransform: 'uppercase',
         marginBottom: 4,
     },

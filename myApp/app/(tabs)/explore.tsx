@@ -470,7 +470,7 @@ export default function TrendsScreen() {
   }, [trends.contextSummary, trends.fallbackInsights, user?.id]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: currentTheme === 'dark' ? theme.background : '#F5F9FF' }]}> 
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}> 
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} />
 

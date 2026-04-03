@@ -21,7 +21,7 @@ export default function InsightCard({ tip = "You're on track to save ₹5,000 mo
                 shadowColor: theme.electricBlue,
             }
         ]}>
-            <View style={styles.iconContainer}>
+            <View style={[styles.iconContainer, { backgroundColor: theme.electricBlue + '15' }]}>
                 <MaterialCommunityIcons name="robot-happy-outline" size={24} color={theme.electricBlue} />
             </View>
             <View style={styles.content}>
@@ -50,7 +50,6 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#eff6ff', // Light blue bg
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
