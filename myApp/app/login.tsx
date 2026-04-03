@@ -304,7 +304,7 @@ const FormInput = React.forwardRef<TextInput, FormInputProps>(({
 });
 
 export default function LoginScreen() {
-  const [formData, setFormData] = useState<Record<string, string>>({ email: 'mailmehere090@gmail.com', password: 'password' });
+  const [formData, setFormData] = useState<Record<string, string>>({ email: '', password: '' });
   const [errors, setErrors] = useState<Record<string, string | undefined | null>>({});
   const [isLoading, setIsLoading] = useState(false);
   

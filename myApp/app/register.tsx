@@ -89,11 +89,11 @@ type FormDataType = typeof initialFormData;
 type FormErrors = Partial<Record<keyof FormDataType | 'form', string>>;
 
 const initialFormData = {
-  name: 'Harshit Sharma',
-  email: 'mailmehere090@gmail.com',
-  phone: '9876543210',
-  password: 'password',
-  confirmPassword: 'password',
+  name: '',
+  email: '',
+  phone: '',
+  password: '',
+  confirmPassword: '',
 };
 
 export default function RegisterScreen() {
